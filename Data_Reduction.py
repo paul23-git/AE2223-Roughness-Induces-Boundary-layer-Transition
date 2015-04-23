@@ -79,7 +79,8 @@ def CandF_PreCalcedTime(dT, time, rho, c, k):
         for j in range(1, n+1):
             #print(j, n, t)
             i = -n+(j-1)
-            sum_n += dT[j] / t[i]
+            dtj = dT[j]
+            sum_n += dtj / t[i]
         sumdata[n] = sum_n
     V = (2*sqrt(rho*c*k))/(sqrt(math.pi))
     return sumdata * V

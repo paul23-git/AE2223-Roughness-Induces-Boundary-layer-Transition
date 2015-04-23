@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 # Read ptw-file 
+import os.path
 from scipy import interpolate
 import numpy as np
 import Data_Reduction
@@ -61,7 +62,7 @@ class ptw_file(object):
 				self._initialized = True
 			return self._value
 	
-	def __init__(self, filename=None, copyFrom=None, slice = None): #Reads the file header and obtains info on the file
+	def __init__(self, filename=None, copyFrom=None, slice = None, qfilename = None): #Reads the file header and obtains info on the file
 		#maintenance variables
 		self._py_temp = self.Deferred(self.python_convert)
 		self._ml_temp = self.Deferred(self.matlab_convert_helper)
@@ -71,6 +72,7 @@ class ptw_file(object):
 		self._ml_q = self.Deferred(self.calcQML)
 		self._data = None
 		self._offsets = (0,0,0)
+		self.qfilename = qfilename
 		if filename is not None:
 			self.loadFile(filename)
 		elif copyFrom is not None and slice is not None:
@@ -116,8 +118,8 @@ class ptw_file(object):
 		#print 'FrameHeaderSize:',self.FrameHeaderSize
 
 		fileobj.seek(27,0)
-		self.nframes = float(np.fromfile(fileobj,'Int32',1))
-		print('nframes:',self.nframes)
+		self.nframes = int(np.fromfile(fileobj,'Int32',1))
+		#print('nframes:',self.nframes)
 
 		fileobj.seek(245,0);
 		self.minlut=float(np.fromfile(fileobj,'Int16',1))
@@ -214,8 +216,13 @@ class ptw_file(object):
 
 
 	def readSlice(self, slice):
-		print("--- Reading frames _data ---")
-		xtup, ytup, timetup = slice
+		print("--- Reading frames data ---")
+		if slice is not None:
+			xtup, ytup, timetup = slice
+		else:
+			xtup = (0, int(self.rows))
+			ytup = (0, int(self.cols))
+			timetup = (0, int(self.nframes))
 		framepointer = range(*timetup)
 		fileobj = open(self.fname, mode='rb')
 		l = len(framepointer)
@@ -235,7 +242,7 @@ class ptw_file(object):
 		
 		#slicing
 		self.depth = l		
-		self._offsets = tuple(x[0] + x[1][0] for x in zip(self._offsets, slice))
+		self._offsets = tuple(x[0] + x[1][0] for x in zip(self._offsets, (xtup, ytup, timetup)))
 		self._data = self._data[xtup[0]:xtup[1], ytup[0]:ytup[1], :]
 
 		
@@ -265,8 +272,31 @@ class ptw_file(object):
 		print("--- Diff done ---")
 		return v
   
+ 
 	def calcQML(self):
 		print("--- Calculating q ---")
+		print(self.qfilename)
+		if os.path.exists(self.qfilename):
+			try:
+				#"H:/AE2223/AE2223/3cm_LE/cylinder_r_4_h_2_100bar_run1_Q.dat"
+				print(self.qfilename)
+				qFileObj = open(self.qfilename, mode = "rb")
+				readoff = np.fromfile(qFileObj, dtype = np.int32, count=3)
+				readshape = np.fromfile(qFileObj, dtype = np.int32, count=3)
+				newoff = np.array(self.offsets, dtype = np.int32)
+				newshape = np.array(self.data.shape, dtype = np.int32)
+				print(readshape, readoff, newshape, newoff)
+				if np.array_equal(readoff, newoff) and np.array_equal(readshape, newshape):
+					print("tst-----------=================")
+					v = self.loadQ(qFileObj, readshape)
+					qFileObj.close()
+					return v
+			except EOFError as e:
+				qFileObj.close()
+		return self.calcQML_Backup()
+				
+			
+	def calcQML_Backup(self):
 		print ("%i iterations" % int(self.data.shape[0] * self.data.shape[1] * self.data.shape[2] * (self.data.shape[2]+1)/2))
 		v = np.zeros(self.ml_delta_temp.shape)
 		T = 590
@@ -309,6 +339,33 @@ class ptw_file(object):
 	def createSlice(self, slice):
 		return ptw_file(copyFrom=self, slice=slice)
 	
+
+	def loadQ(self, qFileObj, shape):
+		size = np.prod(shape)
+		q_dum = np.fromfile(qFileObj, dtype=np.float64, count=size)
+		print("after loading", q_dum.shape, q_dum)
+		shape = tuple(shape.tolist())
+		if size != q_dum.shape[0]:
+			raise EOFError("Too file too small " + str(q_dum.shape[0]))
+		temp = np.zeros(shape)
+		temp = np.reshape(q_dum, shape)
+		return temp
+		
+		
+	def saveQ(self):
+		filename = self.qfilename
+		print(filename, "writing")
+		fileobj = open(filename, mode='wb')
+		off = np.array(self.offsets)
+		
+		shape = np.array(self.data.shape)
+		print(off.dtype, shape.dtype)
+		print(shape)
+		off.tofile(fileobj)
+		shape.tofile(fileobj)
+		self.ml_q.tofile(fileobj)
+		fileobj.close()
+		
 	
 	def dataRaw(self):
 		return self._data

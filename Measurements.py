@@ -4,7 +4,7 @@ import itertools
 import six
 import numpy as np
 import ptw
-
+import Data_Reduction
 
 class measurement(object):
     """
@@ -25,7 +25,7 @@ class measurement(object):
         self.shape = shape
         self.size = size
         self._pressure = pressure *100000
-        self.filepath = filepath
+        self._filepath = filepath
         self.height = height
         self.slice = measurement_slice
         self.leading_edge_distance = LE
@@ -37,17 +37,13 @@ class measurement(object):
         self._C = 120
         self._chord = 1 #meters
         self._a = np.sqrt(self.gamma*self.R*self.T0) #speed of sound
-        
-        if os.path.exists(filepath):
-            self._data = ptw.ptw_file(filepath)
-        else:
-            self._data = None
             
-        self.possibleCalculations = (lambda:self.measurement.data.measurement, 
-                        lambda:self.measurement.data.ml_temp, 
-                        lambda:self.measurement.data.ml_delta_temp,
-                        lambda:self.measurement.data.ml_q)
+        self.possibleCalculations = (lambda:self.data.measurement, 
+                        lambda:self.data.ml_temp, 
+                        lambda:self.data.ml_delta_temp,
+                        lambda:self.data.ml_q)
         self.possibleCalculationNames = ("Raw Data", "Matlab Temp", "Matlab Delta","Matlab q")
+        self._data = None
         
         # calculate and insert other flow & measurement parameters here!
     
@@ -79,16 +75,32 @@ class measurement(object):
         return pressure
     
     @property
+    def filepath(self):
+        return self._filepath
+    @filepath.setter
+    def filepath(self, newpath):
+        self._filepath = newpath
+    
+    @property
     def data(self):
         return self._data
+    def load(self):
+        if os.path.exists(self.filepath):
+            self._data = ptw.ptw_file(self.filepath, qfilename = self.qFilename())
+        else:
+            self._data = None
+    def unload(self):
+        self._data = None
+        Data_Reduction.data_reduction_constant_time.preCalcedPeriods = {}
     def readSlice(self):
         if self.data is not None:
             self.data.readSlice(self.slice)
+    def qFilename(self):
+        fpath, p = os.path.split(self.filepath)
+        fname, ext = os.path.splitext(p)
+        return os.path.join(fpath, fname + "_Q.dat")
     def saveQ(self):
         if self.data is not None:
-            fpath, fname = os.path.split(filepath)
-            
-            filepath.save()
             self.data.saveQ()
     
     

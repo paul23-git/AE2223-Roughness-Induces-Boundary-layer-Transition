@@ -331,7 +331,7 @@ class interface(object):
         self._updateLabels()
 
     def _saveQFunc(self, event):
-        print("saving Q")
+        self.measurement.saveQ()
         
     
     def on_press(self, event):
@@ -503,51 +503,71 @@ def findMeasurementDataFromFilename(all_measurements, fname, leading_edge = slic
                 
     #Measurements.measurements_list.add(Measurements.measurement())
 
-def main():
-    filename = "half_sphere_r_4_60bar_run1.ptw"
-    print(os.__doc__)
+
+def main_loadgoogle(allMeasurements):
     gc = gspread.login("D07TAS", "hypersonicroughness")
         
     
-    allMeasurements = Measurements.all_measurements(("H:/AE2223/AE2223/3cm_LE/","H:/AE2223/AE2223/6cm_LE/"))
+    
 
     loadAllMeasurementsGoogleDocs(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM")
     print("---------------------")
-    ttt = allMeasurements[:,:, :, :, :]
-    #print(ttt)
-    
-    print("----")
-    test_measurements = findMeasurementDataFromFilename(allMeasurements, filename, 30)
-    print(test_measurements)
-    
-    
+
+def main_load_data(test_measurements):
+    for m in test_measurements:
+        m.load()
+        m.readSlice()
+def main_show_measurements(test_measurements):
     datalist = []
     displist = []
-
-
     for m in test_measurements:
-        m.readSlice()
-        
-        
         fmain = plt.figure()
         fmain.suptitle(m.filepath)
         disp = interface(fmain, m, m.data.data)
         displist.append(disp)
-    
-    #disp.rescaleOnSlice((20, 30), (0, 200), (0, 35))
-    #t = newdata.measurement
-    #print (t[100,50,35])
-    #disp.rescaleOnSlice(*slice)
-
-
     plt.show()
+    return (datalist, displist)
+
+def main_calculate_and_save_q(test_measurements):
+    for m in test_measurements:
+        print("-----",m,"-----")
+        m.saveQ()
+def main_calculate_and_save_q_all_memory_efficient(test_measurements):
+    print(len(test_measurements))
+    for m in test_measurements:
+        print("-----",m,"-----")
+        m.load()
+        m.readSlice()
+        m.data.ml_q
+        print("continuing")
+        m.saveQ()
+        print("saved")
+        m.unload()
+        print("unload")
     
-    #imgplot.show()
+def main():
+
+
+
     
+    filename = "cylinder_r_4_h_2_60bar_run1.ptw"
+    allMeasurements = Measurements.all_measurements(("H:/AE2223/AE2223/3cm_LE/","H:/AE2223/AE2223/6cm_LE/"))
+    main_loadgoogle(allMeasurements)
+    #m = convNameData(filename, 30)
+    #m.slice = ((90, 180), (120, 300), (29, 48))
+    #allMeasurements.add_measurement(m)
+
+    print("loaded google docs")
+    #test_measurements = findMeasurementDataFromFilename(allMeasurements, filename, 30)
+    test_measurements = allMeasurements.get_measurements(LE=30)
+    print(test_measurements)
     
-    #print(test2)
+
+    #main_load_data(test_measurements)
+    main_calculate_and_save_q_all_memory_efficient(test_measurements)
+    #main_show_measurements(test_measurements)
     
-    #print(Z)
+
     print("end")
     
 if (__name__ == "__main__"):
