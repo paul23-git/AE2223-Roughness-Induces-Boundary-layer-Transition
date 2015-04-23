@@ -551,7 +551,7 @@ def main():
 
     
     filename = "cylinder_r_2_h_1_60bar_run1.ptw"
-    allMeasurements = Measurements.all_measurements(("H:/AE2223/AE2223/3cm_aLE/","H:/AE2223/AE2223/6cm_LE/"))
+    allMeasurements = Measurements.all_measurements(("C:\Users\Roeland\Documents\GitHub\AE2223-Roughness-Induces-Boundary-layer-Transition/AE2223/AE2223/3cm_LE/","C:\Users\Roeland\Documents\GitHub\AE2223-Roughness-Induces-Boundary-layer-Transition/AE2223/AE2223/6cm_LE/"))
     main_loadgoogle(allMeasurements)
     #m = convNameData(filename, 30)
     #m.slice = ((90, 180), (120, 300), (29, 48))
@@ -559,13 +559,23 @@ def main():
     print(len(allMeasurements))
     print("loaded google docs")
     #test_measurements = findMeasurementDataFromFilename(allMeasurements, filename)
-    test_measurements = allMeasurements.get_measurements(fname = filename)
+    test_measurements = allMeasurements.get_measurements(shape = "square", pressure = 100, height =  2, size = 2, LE=30) 
+    """
+    Item access
+    @param shape: shape slice
+    @param size: size slice
+    @param height: height slice
+    @param pressure: pressure slice
+    @param LE: leading edge slice (mm)
+    @param fname: filepath. If fname is given, loads the specific filenames and ignores other params  
+    @return: List of measurements fitting criteria
+    """
     print(test_measurements)
     
 
-    #main_load_data(test_measurements)
+    main_load_data(test_measurements)
     #main_calculate_and_save_q_all_memory_efficient(test_measurements)
-    #main_show_measurements(test_measurements)
+    main_show_measurements(test_measurements)
     
 
     print("end")

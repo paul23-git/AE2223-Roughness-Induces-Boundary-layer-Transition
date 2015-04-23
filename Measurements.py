@@ -135,6 +135,7 @@ class all_measurements(object):
         """
         item access, format: ["shape","size", "height", "pressure", "LE"]
         """
+        print(key)
         ind = []
         if isinstance(key, str):
             ind.append(next(j for j,v in enumerate(self.keys.shape) if v == key))
@@ -213,6 +214,7 @@ class all_measurements(object):
         """
         ret = []
         items = self.__getitem__((shape, size, height, pressure, LE ))
+        print(items)
         if fname is not None:
             for idx,mlist in np.ndenumerate( items ):
                 try:
@@ -221,7 +223,10 @@ class all_measurements(object):
                     if os.path.split(mlist.filepath)[1] == fname:
                         ret.append(mlist)
         else:
-            return list(itertools.chain(*[mlist for idx,mlist in np.ndenumerate( items ) if len(mlist) > 0]))    
+            try:
+                return list(itertools.chain(*[mlist for idx,mlist in np.ndenumerate( items ) if len(mlist) > 0]))    
+            except TypeError:
+                return items
             
         return ret
     
