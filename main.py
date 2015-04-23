@@ -550,21 +550,21 @@ def main():
 
 
     
-    filename = "cylinder_r_4_h_2_60bar_run1.ptw"
-    allMeasurements = Measurements.all_measurements(("H:/AE2223/AE2223/3cm_LE/","H:/AE2223/AE2223/6cm_LE/"))
+    filename = "cylinder_r_2_h_1_60bar_run1.ptw"
+    allMeasurements = Measurements.all_measurements(("H:/AE2223/AE2223/3cm_aLE/","H:/AE2223/AE2223/6cm_LE/"))
     main_loadgoogle(allMeasurements)
     #m = convNameData(filename, 30)
     #m.slice = ((90, 180), (120, 300), (29, 48))
     #allMeasurements.add_measurement(m)
-
+    print(len(allMeasurements))
     print("loaded google docs")
-    #test_measurements = findMeasurementDataFromFilename(allMeasurements, filename, 30)
-    test_measurements = allMeasurements.get_measurements(LE=30)
+    #test_measurements = findMeasurementDataFromFilename(allMeasurements, filename)
+    test_measurements = allMeasurements.get_measurements(fname = filename)
     print(test_measurements)
     
 
     #main_load_data(test_measurements)
-    main_calculate_and_save_q_all_memory_efficient(test_measurements)
+    #main_calculate_and_save_q_all_memory_efficient(test_measurements)
     #main_show_measurements(test_measurements)
     
 

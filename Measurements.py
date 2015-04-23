@@ -155,7 +155,7 @@ class all_measurements(object):
         return self.measurements.__iter__()
     
     def __len__(self):
-        return sum(len(x.tolist()) for x in np.nditer(ttt, flags=("refs_ok",)))
+        return sum(len(x.tolist()) for x in np.nditer(self.measurements, flags=("refs_ok",)))
     
     def _newShape(self, newshape):
         if newshape != self.measurements.shape:
