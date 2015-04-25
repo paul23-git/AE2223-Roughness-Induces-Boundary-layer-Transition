@@ -275,19 +275,15 @@ class ptw_file(object):
  
 	def calcQML(self):
 		print("--- Calculating q ---")
-		print(self.qfilename)
 		if os.path.exists(self.qfilename):
 			try:
-				#"H:/AE2223/AE2223/3cm_LE/cylinder_r_4_h_2_100bar_run1_Q.dat"
-				print(self.qfilename)
+				
 				qFileObj = open(self.qfilename, mode = "rb")
 				readoff = np.fromfile(qFileObj, dtype = np.int32, count=3)
 				readshape = np.fromfile(qFileObj, dtype = np.int32, count=3)
 				newoff = np.array(self.offsets, dtype = np.int32)
 				newshape = np.array(self.data.shape, dtype = np.int32)
-				print(readshape, readoff, newshape, newoff)
 				if np.array_equal(readoff, newoff) and np.array_equal(readshape, newshape):
-					print("tst-----------=================")
 					v = self.loadQ(qFileObj, readshape)
 					qFileObj.close()
 					return v
@@ -341,9 +337,9 @@ class ptw_file(object):
 	
 
 	def loadQ(self, qFileObj, shape):
+		print(self.qfilename)
 		size = np.prod(shape)
 		q_dum = np.fromfile(qFileObj, dtype=np.float64, count=size)
-		print("after loading", q_dum.shape, q_dum)
 		shape = tuple(shape.tolist())
 		if size != q_dum.shape[0]:
 			raise EOFError("Too file too small " + str(q_dum.shape[0]))

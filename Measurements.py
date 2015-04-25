@@ -11,7 +11,7 @@ class measurement(object):
     Measurement object contains all data relevant to a measurement
     """ 
     
-    def __init__(self, filepath, shape, size, height, pressure, LE, measurement_slice=None):
+    def __init__(self, filepath, shape, size, height, pressure, LE, measurement_slice=None, point = (0,0), scale = 1):
         """
         Initializes a measurement object, keeps track of all measurements and other data
         @param filepath: filepath
@@ -36,9 +36,11 @@ class measurement(object):
         self._mu0 = 0.00001827
         self._C = 120
         self._chord = 1 #meters
+        self.point = point #abs px
+        self.scale = scale #px/mm
         self._a = np.sqrt(self.gamma*self.R*self.T0) #speed of sound
             
-        self.possibleCalculations = (lambda:self.data.measurement, 
+        self.possibleCalculations = (lambda:self.data.data, 
                         lambda:self.data.ml_temp, 
                         lambda:self.data.ml_delta_temp,
                         lambda:self.data.ml_q)
@@ -135,7 +137,6 @@ class all_measurements(object):
         """
         item access, format: ["shape","size", "height", "pressure", "LE"]
         """
-        print(key)
         ind = []
         if isinstance(key, str):
             ind.append(next(j for j,v in enumerate(self.keys.shape) if v == key))
@@ -214,7 +215,6 @@ class all_measurements(object):
         """
         ret = []
         items = self.__getitem__((shape, size, height, pressure, LE ))
-        print(items)
         if fname is not None:
             for idx,mlist in np.ndenumerate( items ):
                 try:

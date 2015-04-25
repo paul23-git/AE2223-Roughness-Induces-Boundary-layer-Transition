@@ -2,6 +2,7 @@
 from collections import namedtuple
 import os.path
 import numpy as np
+from scipy import ndimage
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import gspread
@@ -365,10 +366,14 @@ class interface(object):
         elif axes == self.axDetail and self.detail_line is not None:
             xrange = range(*self._yRange)
             yrange = self.actual_data[self.detail_pos[1], : , self.current_time]
+            ax.set_ylabel("Temp")
+            ax.set_xlabel("Horizontal position")
             ax.plot(xrange, yrange)
         elif axes == self.axColumn and self.column_line is not None:
             xrange = range(*self._xRange)
             yrange = self.actual_data[:, self.detail_pos[0] , self.current_time]
+            ax.set_ylabel("Temp")
+            ax.set_xlabel("Vertical position")
             ax.plot(xrange,yrange)
         elif axes == self.axTime:
             trange = range(*self._timeRange)
@@ -386,10 +391,12 @@ class interface(object):
             for t in range(0, self.actual_data.shape[2]):
                 bmean[t] = np.mean(self.actual_data[:,:,t])
             
-            ax.plot(trange, tmean, color='b', linewidth=1, label="Image mean")
+            #ax.plot(trange, tmean, color='b', linewidth=1, label="Image mean")
     
             ax.plot(trange, bmean, color='r', linewidth=1, label="Box mean")
             ax.plot(trange, bmean, color='r', linewidth=1.5)
+            ax.set_ylabel("Temp")
+            ax.set_xlabel("Time")
             ax.legend()
         ftemp.axes.append(axes)
         plt.show()
@@ -425,7 +432,9 @@ def convNameDataDetail(name):
             height = int(tok[i+1])
             i+=1
         elif (curtok == "r" or curtok == "l") and i < (l-1):
-            size = int(tok[i+1])
+            size = float(tok[i+1])
+            while size > 10:
+                size /= 10
             i+=1
         elif curtok[-3:] == "bar":
             pressure = int(curtok[:-3])
@@ -444,7 +453,7 @@ def convNameData(fname, LE):
     s = "half_spherer"
     if name.startswith(s):
         name = "half_sphere_" + name[len(s)-1:]
-    
+
     if name:
         dat = convNameDataDetail(name)
         return Measurements.measurement(fname, shape = dat.shape, height = dat.height, size = dat.size, pressure = dat.pressure, LE = LE)
@@ -480,6 +489,19 @@ def loadAllMeasurementsGoogleDocs(allmeasurements, login, sheetkey, Verbose = Fa
                                 m.slice = slice
                             except ValueError as E:
                                 pass
+                        if len(row) >= 9:
+                            try:
+                                p = tuple(float(v) for v in row[7:9])
+                                m.point = p
+                            except ValueError as E:
+                                pass
+                        if len(row) >= 10:
+                            try:
+                                s = float(row[9])
+                                m.scale = s
+                            except ValueError as E:
+                                pass
+                                
                         if Verbose:
                             print("Loading measurement", m)
 
@@ -539,19 +561,45 @@ def main_calculate_and_save_q_all_memory_efficient(test_measurements):
         m.load()
         m.readSlice()
         m.data.ml_q
-        print("continuing")
         m.saveQ()
-        print("saved")
         m.unload()
-        print("unload")
+        
+def addGaussianBlur(data):
+    gauss = 1/16*np.array([[1,2,1],[2,4,2],[1,2,1]])
+    return ndimage.convolve(data, gauss, mode = "nearest")
+
+def gaussian2d(rsquared, sigma):
+    return np.exp(- rsquared / (2 * sigma**2))
     
+
+def addGaussianBlurAdv(data, sigma, maxradius):
+    #r = np.array([[2,1,2],[1,0,1],[2,1,2]])
+    r = np.zeros((maxradius*2+1,maxradius*2+1))
+    for ind, _ in np.ndenumerate(r):
+        r[ind] = sum((i - maxradius)**2 for i in ind)
+    gauss = gaussian2d(r, sigma)
+    gauss = 1/np.sum(gauss) * gauss
+    return ndimage.convolve(data, gauss, mode = "nearest")
+
+def syncFilter(data, cutoff, maxradius):
+    r = np.zeros((maxradius*2+1,maxradius*2+1))
+    for ind, _ in np.ndenumerate(r):
+        r[ind] = cutoff*np.sqrt(sum((i - maxradius)**2 for i in ind))
+    sincfilter = np.sinc(r)
+    sincfilter= 1/np.sum(sincfilter) * sincfilter
+    return ndimage.convolve(data, sincfilter, mode = "nearest")
+
+def addBoxBlur(data):
+    blur = 1/9*np.array([[1,1,1],[1,1,1],[1,1,1]])
+    return ndimage.convolve(data, blur, mode = "nearest")
+        
 def main():
 
 
 
     
-    filename = "cylinder_r_2_h_1_60bar_run1.ptw"
-    allMeasurements = Measurements.all_measurements(("C:\Users\Roeland\Documents\GitHub\AE2223-Roughness-Induces-Boundary-layer-Transition/AE2223/AE2223/3cm_LE/","C:\Users\Roeland\Documents\GitHub\AE2223-Roughness-Induces-Boundary-layer-Transition/AE2223/AE2223/6cm_LE/"))
+    #filename = "cylinder_r_4_h_2_100bar_run1.ptw"
+    allMeasurements = Measurements.all_measurements(("H:/AE2223/AE2223/3cm_LE/","H:/AE2223/AE2223/6cm_LE/"))
     main_loadgoogle(allMeasurements)
     #m = convNameData(filename, 30)
     #m.slice = ((90, 180), (120, 300), (29, 48))
@@ -559,7 +607,8 @@ def main():
     print(len(allMeasurements))
     print("loaded google docs")
     #test_measurements = findMeasurementDataFromFilename(allMeasurements, filename)
-    test_measurements = allMeasurements.get_measurements(shape = "square", pressure = 100, height =  2, size = 2, LE=30) 
+    test_measurements = allMeasurements.get_measurements("cylinder",2,1,60,LE=30)[1:] 
+    print(len(test_measurements))
     """
     Item access
     @param shape: shape slice
@@ -570,15 +619,25 @@ def main():
     @param fname: filepath. If fname is given, loads the specific filenames and ignores other params  
     @return: List of measurements fitting criteria
     """
-    print(test_measurements)
+    #print(test_measurements)
     
 
     main_load_data(test_measurements)
+    for m in test_measurements:
+        m.data.ml_delta_temp
+    for m in test_measurements:
+        m.data.ml_q
+        
+    for m in test_measurements:
+        for t in range(0,m.data.ml_q.shape[2]):
+            #m.data.ml_q[:,:,t] = addGaussianBlurAdv(m.data.ml_q[:,:,t], 0.00025 * m.scale, 5)
+            m.data.ml_q[:,:,t] = syncFilter(m.data.ml_q[:,:,t], 1, 20)
     #main_calculate_and_save_q_all_memory_efficient(test_measurements)
     main_show_measurements(test_measurements)
     
 
     print("end")
-    
+
+
 if (__name__ == "__main__"):
     main()

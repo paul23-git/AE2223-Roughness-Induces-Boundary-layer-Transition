@@ -37,16 +37,11 @@ def deltaT_numeric(x, stepsize):
 def preCalcTimeDivisors(timelist, period, num):
     sqrt = np.sqrt
     rooted_period = sqrt(period)
-    for n in range(len(timelist), num):
-        
-        divisor = 0;
-        divlist = []
-        last_sq = sqrt(n)
-        for i in range(1, n +1):
-            sq = sqrt(n-i)
-            divlist.append(rooted_period * (sq+last_sq))
-            last_sq = sq
-        timelist.append(divlist)
+    last_sq = sqrt(num-1)
+    for i in range(2, num + 1 - len(timelist)):
+        sq = sqrt(num-i)
+        timelist.insert(i-2, rooted_period * (sq+last_sq))
+        last_sq = sq
     return timelist
                                                         
 
@@ -69,31 +64,26 @@ def CandF(dT, time, rho, c, k):
 
 def CandF_PreCalcedTime(dT, time, rho, c, k):
     sqrt = np.sqrt
-    sumdata = np.zeros(len(time))
-    for n in range(len(time)):
-        t = time[-1]
-        l = len(t)
-        #print(t)
-        # precompute sqrt(tn-time[0])
+    sumdata = np.zeros(len(dT))
+    for n in range(len(dT)):
         sum_n = 0
         for j in range(1, n+1):
             #print(j, n, t)
             i = -n+(j-1)
             dtj = dT[j]
-            sum_n += dtj / t[i]
+            sum_n += dtj / time[i]
         sumdata[n] = sum_n
     V = (2*sqrt(rho*c*k))/(sqrt(math.pi))
     return sumdata * V
 
 def data_reduction_constant_time(dT, timestep, rho, cp, k):
-    #print (len(dT), timestep)
     if timestep in data_reduction_constant_time.preCalcedPeriods:
         time = data_reduction_constant_time.preCalcedPeriods[timestep]
     else:
         time = []
         data_reduction_constant_time.preCalcedPeriods[timestep] = time
-    
-    if len(time) < len(dT):
+
+    if len(time)+1 < len(dT):
         preCalcTimeDivisors(time, timestep, len(dT))
 
     return CandF_PreCalcedTime(dT, time, rho, cp, k )
