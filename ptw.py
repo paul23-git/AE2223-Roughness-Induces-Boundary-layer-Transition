@@ -45,8 +45,6 @@ class imarray_backend(object):
 	@property
 	def shape(self):
 		return self.imarray.shape
-	
-
 
 class ptw_file(object):
 	class Deferred(object):

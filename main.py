@@ -414,7 +414,244 @@ class interface(object):
                 event.inaxes == self.axColumn: 
                 self.createSubFigure(event.inaxes)
 
+class lastFrameInterface(object):
+    def __init__(self, figure, measurementlist):
+        font = {'family' : 'sans serif',
+            'size'   : 12}
+        fontsmall = {'family' : 'sans serif',
+            'size'   : 10}
+        mpl.rcParams["axes.labelsize"] = 10
+        mpl.rcParams["xtick.labelsize"] = 10
+        mpl.rcParams["ytick.labelsize"] = 10
+        mpl.rcParams["legend.fontsize"] = 10
+        mpl.rcParams["legend.labelspacing"] = 0.3         
+        mpl.rcParams["legend.borderpad"] = 0.3
         
+        
+        self.current_index = 0
+        self.datalist = measurementlist
+
+        self.actual_data = self.datalist[self.current_index].data
+        
+        self.display = figure
+        self.current_time = 0
+        self.gs = mpl.gridspec.GridSpec(4,4, width_ratios=[50,1,20,10], height_ratios=[30,20,20,20])
+        
+        self._xRange = (0, 0+self.actual_data.shape[0])
+        self._yRange = (0, 0+self.actual_data.shape[1])
+
+        
+        self.axes = self.display.add_subplot(self.gs[0:2, 0])
+        self.axColour = self.display.add_subplot(self.gs[0:2,1])
+        self.axText = self.display.add_subplot(self.gs[0,-1], axisbg='lightgoldenrodyellow')
+        self.axDetail = self.display.add_subplot(self.gs[2, :-1])
+        self.axColumn = self.display.add_subplot(self.gs[0:2,2])
+        self.axTime = self.display.add_subplot(self.gs[3, :-1])
+        #self.gs.tight_layout(self.display)
+        self.img = self.axes.imshow(self.actual_data[:,:], interpolation='none', 
+                                    extent=(0,self.actual_data.shape[1],
+                                            self.actual_data.shape[0], 0
+                                            ))
+        min_temp = min(np.amin(m.data) for m in self.datalist)
+        max_temp = max(np.amax(m.data) for m in self.datalist)
+        self.img.set_clim(min_temp, max_temp)
+        #self.maxtime = len(self.actual_data[0,0,:])-1
+        
+        ticksize = np.max((1, int(round((int(np.ceil(max_temp))-int(min_temp))/10.0))))
+        self.cbar = self.display.colorbar(self.img, self.axColour, ticks=range(int(min_temp), int(np.ceil(max_temp)),ticksize))
+        #print(self.cbar.ax.get_xticklabels(minor=True))
+        #self.cbar.ax.set_xticklabels(np.round(self.cbar.ax.get_xticklabels()))
+        
+        self.axDetail.set_title("Row Temperature", **font)
+        self.axDetail.set_ylabel("Q")
+        self.axDetail.set_xlabel("horizontal position")
+        self.axDetail.set_ylim([min_temp, max_temp])
+        self.axDetail.set_autoscaley_on(False)
+
+        self.axColumn.set_title("Column Temperature", **font)
+        self.axColumn.set_ylabel("Q")
+        self.axColumn.set_xlabel("vertical position")
+        self.axColumn.set_ylim([min_temp, max_temp])
+        self.axColumn.set_autoscaley_on(False)
+        
+        self.detail_pos = (np.nan, np.nan)
+        self.hor_line = None
+        self.ver_line = None
+        self.detail_line = None
+        self.detail_ver_line = None
+        self.column_line = None
+        self.column_ver_line = None
+        #self.
+        
+        self.mean = np.mean(self.actual_data[:,:])
+        self.rowmean = 0
+        self.val = 0
+        self.axText.set_autoscalex_on(False)
+        self.axText.set_autoscaley_on(False)
+        self.axText.set_xlim([0,1])
+        self.axText.set_ylim([0,1])
+        self.axText.get_xaxis().set_visible(False)
+        self.axText.get_yaxis().set_visible(False)
+        txt = "(%i, %i, %i) \n" % self.datalist[self.current_index].offsets
+        txt += "(%.0f, %.0f) \n" % self.detail_pos
+        txt += "total mean \n    %.2f \n" % self.mean
+        txt += "row mean \n    %.2f \n" % self.rowmean
+        txt += "Value: %.2f \n" % self.val
+        self.Txt = self.axText.text(0.01,1-0.01,txt,verticalalignment='top', **fontsmall)
+                
+
+        self.bid = self.display.canvas.mpl_connect('key_press_event', self.on_press)
+        self.cid = self.display.canvas.mpl_connect('button_press_event', self.on_mouse_press)
+        
+
+    def _updateLabels(self):
+        self.mean = np.mean(self.actual_data[:,:])
+        if self.detail_line is not None:
+            self.rowmean = np.mean(self.actual_data[self.detail_pos[1], :])
+            self.val = self.actual_data[self.detail_pos[1], self.detail_pos[0]]
+        else:
+            self.rowmean = 0
+            self.val = 0
+        txt = "(%.0f, %.0f, %.0f) \n" % self.datalist[self.current_index].offsets
+        txt += "pos (%.0f, %.0f) \n" % self.detail_pos
+        txt += "total mean \n    %.2f \n" % self.mean
+        txt += "row mean \n    %.2f \n" % self.rowmean
+        txt += "Value: %.2f \n" % self.val
+        self.display.suptitle(self.datalist[self.current_index].filepath)
+        self.Txt.set_text(txt);
+            
+    def update(self, newindex):
+        self.current_index = min(len(self.datalist)-1, max(0, newindex))
+        self.actual_data = self.datalist[self.current_index].data
+        self._updateLabels()
+        self.img.set_data(self.actual_data[:,:])
+        if self.detail_line is not None:
+            self._updateDetailLine(self.detail_pos[1])
+        if self.column_line is not None:
+            self._updateColumnLine(self.detail_pos[0])
+        
+        self.display.canvas.draw()
+       
+        
+    def _updatePos(self, xnew, ynew):
+        if ynew != self.detail_pos[1]:
+            self._updateColumnverLine(ynew)
+            self._updateDetailLine(ynew)
+        
+        if xnew != self.detail_pos[0]:
+            self._updateDetailverLine(xnew)
+            self._updateColumnLine(xnew)
+        
+        
+        
+        
+        if xnew != self.detail_pos[0]:
+            self._updateVerLine(xnew)
+        if ynew != self.detail_pos[1]:
+            self._updateHorLine(ynew)
+
+            
+        self.detail_pos = (xnew, ynew)
+        self._updateLabels()
+        self.display.canvas.draw()
+
+           
+
+            
+    def _updateDetailverLine(self, xnew):
+        if self.detail_ver_line is not None:
+            self.detail_ver_line.set_xdata([xnew, xnew])
+        else:
+            ymin, ymax = self.axDetail.get_ylim()
+            self.detail_ver_line, = self.axDetail.plot([xnew, xnew], [ymin, ymax], '-', color='black',linewidth=1)
+    def _updateDetailLine(self, ynew):
+        xrange = range(*self._yRange )
+        if self.detail_line is not None:
+            self.detail_line.set_xdata(xrange)
+            self.detail_line.set_ydata(self.actual_data[ynew, :])
+        else:
+            yrange = self.actual_data[ynew, :]
+            self.detail_line, = self.axDetail.plot(xrange, yrange)
+            
+    def _updateColumnverLine(self, ynew):
+        if self.column_ver_line is not None:
+            self.column_ver_line.set_xdata([ynew, ynew])
+        else:
+            ymin, ymax = self.axColumn.get_ylim()
+            self.column_ver_line, = self.axColumn.plot([ynew, ynew], [ymin, ymax], '-', color='black',linewidth=1)
+    def _updateColumnLine(self, xnew):
+        yrange = range(*self._xRange )
+        if self.column_line is not None:
+            self.column_line.set_xdata(yrange)
+            self.column_line.set_ydata(self.actual_data[:, xnew])
+        else:
+            xrange = self.actual_data[:, xnew ]
+            self.column_line, = self.axColumn.plot(yrange, xrange)
+    def _updateVerLine(self, xnew):
+        if self.ver_line is not None:
+            self.ver_line.set_xdata([xnew, xnew])
+        else:
+            ymin, ymax = self.axes.get_ylim()
+            self.ver_line, = self.axes.plot([xnew, xnew], [ymin, ymax], '-', color='black',linewidth=1)
+    def _updateHorLine(self, ynew):
+        if self.hor_line is not None:
+            self.hor_line.set_ydata([ynew, ynew])
+        else:
+            xmin, xmax = self.axes.get_xlim()
+            self.hor_line, = self.axes.plot([xmin, xmax], [ynew, ynew], '-', color='black',linewidth=1)
+    def _reScaleTemperature(self, min_temp, max_temp):
+        self.img.set_clim(min_temp, max_temp)
+        self.axDetail.set_ylim([min_temp, max_temp])
+        self.axColumn.set_ylim([min_temp, max_temp])
+        self.axTime.set_ylim([min_temp, max_temp])
+        if self.detail_ver_line is not None:
+            self.detail_ver_line.set_ydata([min_temp, max_temp])
+        if self.column_ver_line is not None:
+            self.column_ver_line.set_ydata([min_temp, max_temp])
+        
+        self.time_ver_line.set_ydata([min_temp, max_temp])
+        ticksize = np.max((1, int(round((int(np.ceil(max_temp))-int(min_temp))/10.0))))
+        self.cbar.set_ticks(range(int(min_temp), int(np.ceil(max_temp)),ticksize))
+        self._updateLabels()
+
+    
+    
+    def on_press(self, event):
+        t = None
+        if (event.key == "right"):
+            t = self.current_index + 1
+        if (event.key == "left"):
+            t = self.current_index - 1 
+        
+        if (t != None):
+            self.update(t)
+    
+    def on_mouse_press_main(self, event):
+        self._updatePos(round(event.xdata), round(event.ydata))
+    
+    def on_mouse_press_detail(self, event):
+        self._updatePos(round(event.xdata), self.detail_pos[1])
+
+    def on_mouse_press_column(self, event):
+        self._updatePos(self.detail_pos[0], round(event.xdata))
+        
+
+        
+        
+        
+    def on_mouse_press(self, event):
+        if event.button == 1:
+            if event.inaxes == self.axes: self.on_mouse_press_main(event)
+            elif event.inaxes == self.axDetail and self.detail_line is not None: self.on_mouse_press_detail(event)
+            elif event.inaxes == self.axTime: self.on_mouse_press_time(event)
+            elif event.inaxes == self.axColumn and self.column_line is not None: self.on_mouse_press_column(event)
+        #else:
+        #    if event.inaxes == self.axes or \
+        #        event.inaxes == self.axDetail or \
+        #        event.inaxes == self.axTime or \
+        #        event.inaxes == self.axColumn: 
+        #        self.createSubFigure(event.inaxes)
+
 
 def convNameDataDetail(name):
     tok = name.split("_")
@@ -549,13 +786,17 @@ def main_show_measurements(test_measurements):
         displist.append(disp)
     plt.show()
     return (datalist, displist)
+def main_show_reduced_measurements(reduced_measurements):
+    fmain = plt.figure()
+    disp = lastFrameInterface(fmain, reduced_measurements)
+    plt.show()
+    return disp
 
 def main_calculate_and_save_q(test_measurements):
     for m in test_measurements:
         print("-----",m,"-----")
         m.saveQ()
 def main_calculate_and_save_q_all_memory_efficient(test_measurements):
-    print(len(test_measurements))
     for m in test_measurements:
         print("-----",m,"-----")
         m.load()
@@ -563,6 +804,20 @@ def main_calculate_and_save_q_all_memory_efficient(test_measurements):
         m.data.ml_q
         m.saveQ()
         m.unload()
+        
+ 
+def main_keep_only_last_q(test_measurements):
+    simple_measurements = []
+    for m in test_measurements:
+        print("-----",m,"-----")
+        m.load()
+        m.readSlice()
+        simple_measurements.append(Measurements.simple_measurement(m))
+        m.unload()
+    return simple_measurements
+    
+        
+
         
 def addGaussianBlur(data):
     gauss = 1/16*np.array([[1,2,1],[2,4,2],[1,2,1]])
@@ -592,6 +847,10 @@ def syncFilter(data, cutoff, maxradius):
 def addBoxBlur(data):
     blur = 1/9*np.array([[1,1,1],[1,1,1],[1,1,1]])
     return ndimage.convolve(data, blur, mode = "nearest")
+
+
+
+
         
 def main():
 
@@ -607,7 +866,9 @@ def main():
     print(len(allMeasurements))
     print("loaded google docs")
     #test_measurements = findMeasurementDataFromFilename(allMeasurements, filename)
-    test_measurements = allMeasurements.get_measurements("cylinder",2,1,60,LE=30)[1:] 
+    #test_measurements = allMeasurements.get_measurements("cylinder",4,2,80,LE=30)
+    #test_measurements = allMeasurements.get_measurements("cylinder",2.85,LE=30)
+    test_measurements = allMeasurements.get_measurements("square",LE=30)  
     print(len(test_measurements))
     """
     Item access
@@ -620,20 +881,16 @@ def main():
     @return: List of measurements fitting criteria
     """
     #print(test_measurements)
+    reduced_measurements = main_keep_only_last_q(test_measurements)
+    main_show_reduced_measurements(reduced_measurements)
     
-
-    main_load_data(test_measurements)
-    for m in test_measurements:
-        m.data.ml_delta_temp
-    for m in test_measurements:
-        m.data.ml_q
-        
-    for m in test_measurements:
-        for t in range(0,m.data.ml_q.shape[2]):
-            #m.data.ml_q[:,:,t] = addGaussianBlurAdv(m.data.ml_q[:,:,t], 0.00025 * m.scale, 5)
-            m.data.ml_q[:,:,t] = syncFilter(m.data.ml_q[:,:,t], 1, 20)
-    #main_calculate_and_save_q_all_memory_efficient(test_measurements)
-    main_show_measurements(test_measurements)
+    #main_load_data(test_measurements)
+    #main_show_measurements(test_measurements)
+    #for m in test_measurements:
+    #    m.data.ml_delta_temp
+    #for m in test_measurements:
+    #    m.data.ml_q
+    
     
 
     print("end")

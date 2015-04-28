@@ -71,10 +71,17 @@ class measurement(object):
         return self.M*self.a
     @property
     def static_pressure(self):
-        return self.totalpressure*(1+(self.gamma-1)/2*self.M**2)**(-self.gamma/(self.gamma-1))
+        return self.pressure_pascal()*(1+(self.gamma-1)/2*self.M**2)**(-self.gamma/(self.gamma-1))
     
+    def pressure_bar(self):
+        return pressure/100000
+   
     def pressure_pascal(self):
         return pressure
+    
+    @property
+    def offsets(self):
+        return self.data.offsets
     
     @property
     def filepath(self):
@@ -114,6 +121,101 @@ class measurement(object):
         #LE_str = str()
         return "measure" + str((self.filepath, str(self.leading_edge_distance)))
 
+
+class simple_measurement(object):
+    """
+    Measurement object contains all data relevant to a measurement
+    """ 
+    
+    def __init__(self, measurement, data = None):
+        """
+        Initializes a measurement object, keeps track of all measurements and other data
+        @param filepath: filepath
+        @param shape: roughness shape
+        @type shape: string 
+        @param size: roughness size (mm)
+        @param height: roughness height (mm)
+        @param pressure: total pressure (bar)
+        @param measurement_slice: slice containing measurement
+        """ 
+        self.shape = measurement.shape
+        self.size = measurement.size
+        self._pressure = measurement._pressure *100000
+        self._filepath = measurement.filepath
+        self.height = measurement.height
+        self.leading_edge_distance = measurement.leading_edge_distance
+        self._gamma = 1.4
+        self._R = 287.05 
+        self._M = 7.5 #mach
+        self._T0 = 775 #kelvin
+        self._mu0 = 0.00001827
+        self._C = 120
+        self._chord = 1 #meters
+        self.point = measurement.point #abs px
+        self.scale = measurement.scale #px/mm
+        self._a = np.sqrt(self.gamma*self.R*self.T0) #speed of sound
+        self.offsets = measurement.offsets
+        
+        if data == None:
+            self._data = measurement.data.ml_q[:,:,-1]
+        else:
+            self._data = data[:,:,-1]
+        
+        # calculate and insert other flow & measurement parameters here!
+    
+           
+    @property
+    def gamma(self):
+        return self._gamma
+    @property
+    def pressure(self):
+        return self._pressure/100000
+    @property
+    def R(self):
+        return self._R
+    @property
+    def M(self):
+        return self._M
+    @property
+    def T0(self):
+        return self._T0
+        #recalculate other flow parameters here!
+    @property
+    def V(self):
+        return self.M*self.a
+    @property
+    def static_pressure(self):
+        return self.pressure_pascal()*(1+(self.gamma-1)/2*self.M**2)**(-self.gamma/(self.gamma-1))
+    
+    def pressure_bar(self):
+        return pressure/100000
+    
+    def pressure_pascal(self):
+        return pressure
+    
+    @property
+    def filepath(self):
+        return self._filepath
+    @filepath.setter
+    def filepath(self, newpath):
+        self._filepath = newpath
+    
+    @property
+    def data(self):
+        return self._data
+
+    
+    
+    def __repr__(self):
+        return "measure" + str((self.filepath, str(self.leading_edge_distance)))
+    
+    
+    def __str__(self):
+        #LE_str = str()
+        return "measure" + str((self.filepath, str(self.leading_edge_distance)))
+
+
+
 class all_measurements(object):
     """
     List to keep track of all measurements
@@ -149,7 +251,11 @@ class all_measurements(object):
                     newk = slice(start, stop, step)
                     ind.append(newk)
                 else: 
-                    tst = next(j for j,v in enumerate(self.keys[i]) if v == k)
+                    try:
+                        tst = next(j for j,v in enumerate(self.keys[i]) if v == k)
+                    except StopIteration as _:
+                        print("Error: trying to open inexisting index", k)
+                        raise
                     ind.append(tst)
         return self.measurements[tuple(ind)]
     
