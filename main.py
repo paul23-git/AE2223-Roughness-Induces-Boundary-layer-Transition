@@ -51,7 +51,7 @@ class interface(object):
         self.img = self.axes.imshow(self.actual_data[:,:,self.current_time], interpolation='none', 
                                     extent=(0,self.actual_data.shape[1],
                                             self.actual_data.shape[0], 0
-                                            ))
+                                            ), aspect = "auto")
         min_temp = np.amin(self.actual_data)
         max_temp = np.amax(self.actual_data)
         self.img.set_clim(min_temp, max_temp)
@@ -362,7 +362,7 @@ class interface(object):
         ftemp = plt.figure()
         ax = ftemp.add_subplot("111")
         if axes == self.axes:
-            ax.imshow(self.actual_data[:,:,self.current_time], interpolation='none')
+            ax.imshow(self.actual_data[:,:,self.current_time], interpolation='none', aspect = "auto")
         elif axes == self.axDetail and self.detail_line is not None:
             xrange = range(*self._yRange)
             yrange = self.actual_data[self.detail_pos[1], : , self.current_time]
@@ -451,7 +451,7 @@ class lastFrameInterface(object):
         self.img = self.axes.imshow(self.actual_data[:,:], interpolation='none', 
                                     extent=(0,self.actual_data.shape[1],
                                             self.actual_data.shape[0], 0
-                                            ))
+                                            ), aspect="auto")
         min_temp = min(np.amin(m.data) for m in self.datalist)
         max_temp = max(np.amax(m.data) for m in self.datalist)
         self.img.set_clim(min_temp, max_temp)
@@ -741,6 +741,50 @@ def loadAllMeasurementsGoogleDocs(allmeasurements, login, sheetkey, Verbose = Fa
                                 
                         if Verbose:
                             print("Loading measurement", m)
+def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 25, trailing = 80, pre = 12):
+    print(" --- Loading measurement from google docs --- ")
+    sh = login.open_by_key(sheetkey)
+    worksheets = sh.worksheets()
+    for ws in worksheets:
+        if Verbose:
+            print("Sheet", ws.title)
+        try:
+            LE = int(ws.title)
+        except ValueError as e:
+            print("Undefined sheet", ws.title)
+        else:
+            listoflists = ws.get_all_values()
+            for row in listoflists[1:]:
+                if row and row[0]:
+                    name = row[0]
+                    try:
+                        m = convNameData(name, LE)
+                    except ValueError as e:
+                        print ("Badly formatted filename", fname)
+                    else:
+                                                        
+                        if Verbose:
+                            print("Loading measurement", m)
+                        allmeasurements.add_measurement(m)
+                        if len(row) >= 9:
+                            try:
+                                p = tuple(float(v) for v in row[7:9])
+                                m.point = p
+                            except ValueError as E:
+                                pass
+                        if len(row) >= 10:
+                            try:
+                                s = float(row[9])
+                                m.scale = s
+                            except ValueError as E:
+                                pass
+ 
+                        slice = ([int(m.point[1] - vertical*m.scale) , int(m.point[1] + vertical*m.scale)], 
+                                 [int(m.point[0] - trailing*m.scale), int(m.point[0] + pre*m.scale)], 
+                                 [int(v) for v in row[5:7]])
+                        m.slice = slice
+                        print("SLIIIICE", m.slice)
+
 
 
 def findMeasurementDataFromFilename(all_measurements, fname, leading_edge = slice(None, None, None)):
@@ -769,7 +813,7 @@ def main_loadgoogle(allMeasurements):
     
     
 
-    loadAllMeasurementsGoogleDocs(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM")
+    loadAllMeasurementsGoogleDocsAdaptiveSlicing(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM")
     print("---------------------")
 
 def main_load_data(test_measurements):
@@ -830,10 +874,13 @@ def gaussian2d(rsquared, sigma):
 def addGaussianBlurAdv(data, sigma, maxradius):
     #r = np.array([[2,1,2],[1,0,1],[2,1,2]])
     r = np.zeros((maxradius*2+1,maxradius*2+1))
+    
     for ind, _ in np.ndenumerate(r):
         r[ind] = sum((i - maxradius)**2 for i in ind)
     gauss = gaussian2d(r, sigma)
+    print(gauss)
     gauss = 1/np.sum(gauss) * gauss
+    
     return ndimage.convolve(data, gauss, mode = "nearest")
 
 def syncFilter(data, cutoff, maxradius):
@@ -857,7 +904,7 @@ def main():
 
 
     
-    #filename = "cylinder_r_4_h_2_100bar_run1.ptw"
+    #filename = "square_l_2_h_2_100bar_run1.ptw"
     allMeasurements = Measurements.all_measurements(("H:/AE2223/AE2223/3cm_LE/","H:/AE2223/AE2223/6cm_LE/"))
     main_loadgoogle(allMeasurements)
     #m = convNameData(filename, 30)
@@ -865,11 +912,23 @@ def main():
     #allMeasurements.add_measurement(m)
     print(len(allMeasurements))
     print("loaded google docs")
-    #test_measurements = findMeasurementDataFromFilename(allMeasurements, filename)
-    #test_measurements = allMeasurements.get_measurements("cylinder",4,2,80,LE=30)
+    #test_measurements = allMeasurements.get_measurements(LE=60)
+    #test_measurements = allMeasurements.get_measurements(fname = filename,LE=30)
+    #test_measurements = allMeasurements.get_measurements(fname = filename,LE=60)
     #test_measurements = allMeasurements.get_measurements("cylinder",2.85,LE=30)
-    test_measurements = allMeasurements.get_measurements("square",LE=30)  
+    test_measurements = allMeasurements.get_measurements()  
+    """
+        Item access
+        @param shape: shape slice
+        @param size: size slice
+        @param height: height slice
+        @param pressure: pressure slice
+        @param LE: leading edge slice
+        @param fname: filepath. If fname is given, loads the specific filenames and ignores other params  
+        @return: List of measurements fitting criteria
+        """
     print(len(test_measurements))
+    main_calculate_and_save_q_all_memory_efficient(test_measure)
     """
     Item access
     @param shape: shape slice
@@ -881,15 +940,23 @@ def main():
     @return: List of measurements fitting criteria
     """
     #print(test_measurements)
-    reduced_measurements = main_keep_only_last_q(test_measurements)
-    main_show_reduced_measurements(reduced_measurements)
+    #reduced_measurements = main_keep_only_last_q(test_measurements)
+    #main_show_reduced_measurements(reduced_measurements)
     
     #main_load_data(test_measurements)
-    #main_show_measurements(test_measurements)
+    
     #for m in test_measurements:
     #    m.data.ml_delta_temp
     #for m in test_measurements:
     #    m.data.ml_q
+    #for m in test_measurements:
+    #    for t in range(0,m.data.ml_q.shape[2]):
+    #        m.data.ml_q[:,:,t] = addGaussianBlurAdv(m.data.ml_q[:,:,t], 0.2 * m.scale, 2)
+            #m.data.ml_q[:,:,t] = syncFilter(m.data.ml_q[:,:,t], 1, 20)
+            #m.data.ml_q[:,:,t] = addBoxBlur(m.data.ml_q[:,:,t])
+        
+    #main_show_measurements(test_measurements)
+        
     
     
 
