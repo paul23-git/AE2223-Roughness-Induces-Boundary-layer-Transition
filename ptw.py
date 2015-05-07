@@ -9,43 +9,6 @@ import Data_Reduction
 
 #from PyQt4 import QtGui
 
-class imarray_backend(object):
-	def __new__(subtype,data,dtype=None):
-		subarr=np.empty(data,dtype=dtype)
-		return subarr
-	
-	def __init__(self, xoff, yoff, toff, lenx, leny, lent):
-		self.offsets = (xoff, yoff, toff)
-		self.lengths = (lenx, leny, lent)
-		self.imarray = np.zeros([lenx, leny, lent])
-	
-	def __setitem__(self, key, value):
-		newkey = (self.__slice_ext_to_int(k, i) for i,k in enumerate(key))
-		return self.imarray.__setitem__(tuple(newkey), value)
-	
-	def __len__(self):
-		return len(imarray)
-	
-	def __slice_ext_to_int(self, s, i):
-		if isinstance(s, slice):
-			start = s.start - self.offsets[i] if s.start is not None else None
-			stop = s.stop - self.offsets[i] if s.start is not None else None
-			return slice(start, stop, s.step)
-		else:
-			return s - self.offsets[i]
-	
-	def getRaw(self):
-		return self.imarray	
-	
-	
-	def __getitem__(self, key):
-		newkey = (self.__slice_ext_to_int(k, i) for i,k in enumerate(key))
-		return self.imarray.__getitem__(tuple(newkey))
-	
-	@property
-	def shape(self):
-		return self.imarray.shape
-
 class ptw_file(object):
 	class Deferred(object):
 		def isIntialized(self):

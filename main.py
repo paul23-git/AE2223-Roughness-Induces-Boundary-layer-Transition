@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import gspread
 import Data_Reduction
 import Measurements
-import ptw
+import analyses
 
 class interface(object):
     def __init__(self, figure, measurement, actual_data = None):
@@ -52,10 +52,14 @@ class interface(object):
                                     extent=(0,self.actual_data.shape[1],
                                             self.actual_data.shape[0], 0
                                             ), aspect = "auto")
+        print(self.measurement.offsets, self.measurement.point)
+        self.point = self.axes.plot(self.measurement.point[0]-self.measurement.offsets[0], self.measurement.point[1]-self.measurement.offsets[1], 'x', color = "white")
         min_temp = np.amin(self.actual_data)
         max_temp = np.amax(self.actual_data)
         self.img.set_clim(min_temp, max_temp)
         #self.maxtime = len(self.actual_data[0,0,:])-1
+        self.axes.set_xlim([0,self.actual_data.shape[1]])
+        self.axes.set_ylim([0, self.actual_data.shape[0]])
         self.axes.set_autoscalex_on(False)
         self.axes.set_autoscaley_on(False)
         
@@ -433,9 +437,10 @@ class lastFrameInterface(object):
 
         self.actual_data = self.datalist[self.current_index].data
         
+        
         self.display = figure
         self.current_time = 0
-        self.gs = mpl.gridspec.GridSpec(4,4, width_ratios=[50,1,20,10], height_ratios=[30,20,20,20])
+        self.gs = mpl.gridspec.GridSpec(4,4, width_ratios=[50,1,20,10], height_ratios=[30,20,20,5])
         
         self._xRange = (0, 0+self.actual_data.shape[0])
         self._yRange = (0, 0+self.actual_data.shape[1])
@@ -452,6 +457,14 @@ class lastFrameInterface(object):
                                     extent=(0,self.actual_data.shape[1],
                                             self.actual_data.shape[0], 0
                                             ), aspect="auto")
+        m = self.datalist[self.current_index]
+        self.point, = self.axes.plot(m.point[0]-m.offsets[0], m.point[1]-m.offsets[1], 'x', color = "white")
+        self.axes.set_xlim([0,self.actual_data.shape[1]])
+        self.axes.set_ylim([0, self.actual_data.shape[0]])
+        self.axes.set_autoscalex_on(False)
+        self.axes.set_autoscaley_on(False)
+        
+        
         min_temp = min(np.amin(m.data) for m in self.datalist)
         max_temp = max(np.amax(m.data) for m in self.datalist)
         self.img.set_clim(min_temp, max_temp)
@@ -492,7 +505,7 @@ class lastFrameInterface(object):
         self.axText.set_ylim([0,1])
         self.axText.get_xaxis().set_visible(False)
         self.axText.get_yaxis().set_visible(False)
-        txt = "(%i, %i, %i) \n" % self.datalist[self.current_index].offsets
+        txt = "(%i, %i) \n" % self.datalist[self.current_index].offsets
         txt += "(%.0f, %.0f) \n" % self.detail_pos
         txt += "total mean \n    %.2f \n" % self.mean
         txt += "row mean \n    %.2f \n" % self.rowmean
@@ -512,7 +525,7 @@ class lastFrameInterface(object):
         else:
             self.rowmean = 0
             self.val = 0
-        txt = "(%.0f, %.0f, %.0f) \n" % self.datalist[self.current_index].offsets
+        txt = "(%.i, %.i) \n" % self.datalist[self.current_index].offsets
         txt += "pos (%.0f, %.0f) \n" % self.detail_pos
         txt += "total mean \n    %.2f \n" % self.mean
         txt += "row mean \n    %.2f \n" % self.rowmean
@@ -522,9 +535,16 @@ class lastFrameInterface(object):
             
     def update(self, newindex):
         self.current_index = min(len(self.datalist)-1, max(0, newindex))
-        self.actual_data = self.datalist[self.current_index].data
+        m = self.datalist[self.current_index]
+        self.actual_data = m.data
         self._updateLabels()
-        self.img.set_data(self.actual_data[:,:])
+        self.img = self.axes.imshow(self.actual_data, interpolation='none', 
+                                    extent=(0,self.actual_data.shape[1],
+                                            self.actual_data.shape[0], 0
+                                            ), aspect="auto")
+        self.point.set_data(m.point[0]-m.offsets[0], m.point[1]-m.offsets[1])
+        self.axes.set_xlim([0,self.actual_data.shape[1]])
+        self.axes.set_ylim([0, self.actual_data.shape[0]])
         if self.detail_line is not None:
             self._updateDetailLine(self.detail_pos[1])
         if self.column_line is not None:
@@ -676,7 +696,9 @@ def convNameDataDetail(name):
         elif curtok[-3:] == "bar":
             pressure = int(curtok[:-3])
         i+=1
-    dat = DocsData(shape=shape, size=size, height=height, pressure=pressure) #Measurements.measurement(fname, shape, height, size, pressure, LE)
+    if shape == "half_sphere":
+        height = size
+    dat = DocsData(shape=shape, size=size, height=height, pressure=pressure) 
     return dat
 
 
@@ -741,7 +763,7 @@ def loadAllMeasurementsGoogleDocs(allmeasurements, login, sheetkey, Verbose = Fa
                                 
                         if Verbose:
                             print("Loading measurement", m)
-def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 25, trailing = 80, pre = 12):
+def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 80, pre = 12):
     print(" --- Loading measurement from google docs --- ")
     sh = login.open_by_key(sheetkey)
     worksheets = sh.worksheets()
@@ -783,7 +805,46 @@ def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetke
                                  [int(m.point[0] - trailing*m.scale), int(m.point[0] + pre*m.scale)], 
                                  [int(v) for v in row[5:7]])
                         m.slice = slice
-                        print("SLIIIICE", m.slice)
+                        print("Slice", m.slice)
+def loadAllMeasurementsGoogleDocsNoSlicing(allmeasurements, login, sheetkey, Verbose = False):
+    print(" --- Loading measurement from google docs --- ")
+    sh = login.open_by_key(sheetkey)
+    worksheets = sh.worksheets()
+    for ws in worksheets:
+        if Verbose:
+            print("Sheet", ws.title)
+        try:
+            LE = int(ws.title)
+        except ValueError as e:
+            print("Undefined sheet", ws.title)
+        else:
+            listoflists = ws.get_all_values()
+            for row in listoflists[1:]:
+                if row and row[0]:
+                    name = row[0]
+                    try:
+                        m = convNameData(name, LE)
+                    except ValueError as e:
+                        print ("Badly formatted filename", fname)
+                    else:
+                                                        
+                        if Verbose:
+                            print("Loading measurement", m)
+                        allmeasurements.add_measurement(m)
+                        if len(row) >= 9:
+                            try:
+                                p = tuple(float(v) for v in row[7:9])
+                                m.point = p
+                            except ValueError as E:
+                                pass
+                        if len(row) >= 10:
+                            try:
+                                s = float(row[9])
+                                m.scale = s
+                            except ValueError as E:
+                                pass
+
+
 
 
 
@@ -814,6 +875,7 @@ def main_loadgoogle(allMeasurements):
     
 
     loadAllMeasurementsGoogleDocsAdaptiveSlicing(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM")
+    #loadAllMeasurementsGoogleDocsNoSlicing(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM")
     print("---------------------")
 
 def main_load_data(test_measurements):
@@ -854,10 +916,14 @@ def main_keep_only_last_q(test_measurements):
     simple_measurements = []
     for m in test_measurements:
         print("-----",m,"-----")
-        m.load()
-        m.readSlice()
+        l = False
+        if not m.isLoaded():
+            l = True
+            m.load()
+            m.readSlice()
         simple_measurements.append(Measurements.simple_measurement(m))
-        m.unload()
+        if l:
+            m.unload()
     return simple_measurements
     
         
@@ -897,6 +963,36 @@ def addBoxBlur(data):
 
 
 
+def onGoingAnalysis(test_measurements):
+    simple_measurements = main_keep_only_last_q(test_measurements)
+    for m in simple_measurements:
+        line = analyses.getColumnLine(m.data)
+        rel_point = m.to_relative_pos(m.point)
+        print(m)
+        
+        #upstream only
+        tmp = m.data[:,rel_point[0]:]
+        tmpline = line[rel_point[0]:]
+        pos = m.to_absolute_pos(np.unravel_index(tmp.T.argmax(), tmp.T.shape))
+        pos = m.to_point_pos(pos)
+        print("   maximum (upstream)", np.amax(tmp), pos)
+        pos = line.argmax() + m.offsets[0] - m.point[0]
+        print("   maximum column (upstream)", np.amax(line),line.argmax(), pos)
+        
+        
+        
+        #trailing point only        
+        tmp = m.data[:,:rel_point[0]]
+        tmpline = line[:rel_point[0]]
+        pos = m.to_absolute_pos(np.unravel_index(tmp.T.argmax(), tmp.T.shape))
+        pos = m.to_point_pos(pos)
+        print("   maximum (trail)", np.amax(tmp), pos)
+        pos = line.argmax() + m.offsets[0] - m.point[0]
+        print("   maximum column (trail)", np.amax(line),line.argmax(), pos)
+        
+        
+    main_show_reduced_measurements(simple_measurements)
+
 
         
 def main():
@@ -904,9 +1000,10 @@ def main():
 
 
     
-    #filename = "square_l_2_h_2_100bar_run1.ptw"
-    allMeasurements = Measurements.all_measurements(("H:/AE2223/AE2223/3cm_LE/","H:/AE2223/AE2223/6cm_LE/"))
+    filename = "half_sphere_r_2_100bar_run2.ptw"
+    allMeasurements = Measurements.all_measurements(("H:/AE2223-II/3cm_LE/","H:/AE2223-II/6cm_LE/"))
     main_loadgoogle(allMeasurements)
+    
     #m = convNameData(filename, 30)
     #m.slice = ((90, 180), (120, 300), (29, 48))
     #allMeasurements.add_measurement(m)
@@ -916,7 +1013,9 @@ def main():
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=30)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=60)
     #test_measurements = allMeasurements.get_measurements("cylinder",2.85,LE=30)
-    test_measurements = allMeasurements.get_measurements()  
+    test_measurements = allMeasurements.get_measurements()
+    main_calculate_and_save_q_all_memory_efficient(test_measurements)
+    #test_measurements.extend(allMeasurements.get_measurements( size=2, height=2, pressure=100, LE=60)  )
     """
         Item access
         @param shape: shape slice
@@ -928,34 +1027,8 @@ def main():
         @return: List of measurements fitting criteria
         """
     print(len(test_measurements))
-    main_calculate_and_save_q_all_memory_efficient(test_measure)
-    """
-    Item access
-    @param shape: shape slice
-    @param size: size slice
-    @param height: height slice
-    @param pressure: pressure slice
-    @param LE: leading edge slice (mm)
-    @param fname: filepath. If fname is given, loads the specific filenames and ignores other params  
-    @return: List of measurements fitting criteria
-    """
-    #print(test_measurements)
-    #reduced_measurements = main_keep_only_last_q(test_measurements)
-    #main_show_reduced_measurements(reduced_measurements)
     
-    #main_load_data(test_measurements)
-    
-    #for m in test_measurements:
-    #    m.data.ml_delta_temp
-    #for m in test_measurements:
-    #    m.data.ml_q
-    #for m in test_measurements:
-    #    for t in range(0,m.data.ml_q.shape[2]):
-    #        m.data.ml_q[:,:,t] = addGaussianBlurAdv(m.data.ml_q[:,:,t], 0.2 * m.scale, 2)
-            #m.data.ml_q[:,:,t] = syncFilter(m.data.ml_q[:,:,t], 1, 20)
-            #m.data.ml_q[:,:,t] = addBoxBlur(m.data.ml_q[:,:,t])
-        
-    #main_show_measurements(test_measurements)
+
         
     
     

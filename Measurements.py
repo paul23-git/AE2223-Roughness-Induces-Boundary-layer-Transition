@@ -5,6 +5,7 @@ import six
 import numpy as np
 import ptw
 import Data_Reduction
+import operator
 
 class measurement(object):
     """
@@ -81,7 +82,7 @@ class measurement(object):
     
     @property
     def offsets(self):
-        return self.data.offsets
+        return (self.data.offsets[1], self.data.offsets[0], self.data.offsets[2]) 
     
     @property
     def filepath(self):
@@ -97,6 +98,7 @@ class measurement(object):
         if os.path.exists(self.filepath):
             self._data = ptw.ptw_file(self.filepath, qfilename = self.qFilename())
         else:
+            print("File not found", self.filepath)
             self._data = None
     def unload(self):
         self._data = None
@@ -111,7 +113,8 @@ class measurement(object):
     def saveQ(self):
         if self.data is not None:
             self.data.saveQ()
-    
+    def isLoaded(self):
+        return self.data is not None
     
     def __repr__(self):
         return "measure" + str((self.filepath, str(self.leading_edge_distance)))
@@ -154,7 +157,7 @@ class simple_measurement(object):
         self.point = measurement.point #abs px
         self.scale = measurement.scale #px/mm
         self._a = np.sqrt(self.gamma*self.R*self.T0) #speed of sound
-        self.offsets = measurement.offsets
+        self.offsets = measurement.offsets[:-1]
         
         if data == None:
             self._data = measurement.data.ml_q[:,:,-1]
@@ -205,6 +208,15 @@ class simple_measurement(object):
         return self._data
 
     
+    def to_absolute_pos(self, relative_pos):
+        return tuple(map(operator.add,relative_pos, self.offsets))
+    
+    def to_relative_pos(self, absolute_pos):
+        return tuple(map(operator.sub,absolute_pos, self.offsets))
+    
+    def to_point_pos(self, absolute_pos):
+        return tuple(map(operator.sub,absolute_pos, self.point))
+        
     
     def __repr__(self):
         return "measure" + str((self.filepath, str(self.leading_edge_distance)))
