@@ -189,7 +189,7 @@ class interface(object):
         txt += "total mean \n    %.2f \n" % self.mean
         txt += "box mean \n    %.2f \n" % self.boxmean
         txt += "row mean \n    %.2f \n" % self.rowmean
-        txt += "Value: %.2f \n" % self.val
+        txt += "Value: %.4f \n" % self.val
         self.Txt.set_text(txt);
             
         
@@ -201,8 +201,13 @@ class interface(object):
         self._xRange = xRange
         self._yRange = yRange
         self._timeRange = timeRange
-        min_temp = np.amin(self.actual_data[xRange[0]:xRange[1], yRange[0]:yRange[1], timeRange[0]:timeRange[1]])
-        max_temp = np.amax(self.actual_data[xRange[0]:xRange[1], yRange[0]:yRange[1], timeRange[0]:timeRange[1]])
+        test = np.sort(self.actual_data, axis = None)
+        v = 0.00
+        min_temp = test[max(0, int(v*len(test)))]
+        max_temp = test[min(len(test)-1, int((1-v)*len(test)))]
+        #min_temp = np.amin(self.actual_data[xRange[0]:xRange[1], yRange[0]:yRange[1], timeRange[0]:timeRange[1]])
+        #max_temp = np.amax(self.actual_data[xRange[0]:xRange[1], yRange[0]:yRange[1], timeRange[0]:timeRange[1]])
+
         self._reScaleTemperature(min_temp, max_temp)
         self._updateBoxMeanLine()
         self._updateLabels()
@@ -507,9 +512,9 @@ class lastFrameInterface(object):
         self.axText.get_yaxis().set_visible(False)
         txt = "(%i, %i) \n" % self.datalist[self.current_index].offsets
         txt += "(%.0f, %.0f) \n" % self.detail_pos
-        txt += "total mean \n    %.2f \n" % self.mean
-        txt += "row mean \n    %.2f \n" % self.rowmean
-        txt += "Value: %.2f \n" % self.val
+        txt += "total mean \n    %.4f \n" % self.mean
+        txt += "row mean \n    %.4f \n" % self.rowmean
+        txt += "Value: %.4f \n" % self.val
         self.Txt = self.axText.text(0.01,1-0.01,txt,verticalalignment='top', **fontsmall)
                 
 
@@ -527,9 +532,9 @@ class lastFrameInterface(object):
             self.val = 0
         txt = "(%.i, %.i) \n" % self.datalist[self.current_index].offsets
         txt += "pos (%.0f, %.0f) \n" % self.detail_pos
-        txt += "total mean \n    %.2f \n" % self.mean
-        txt += "row mean \n    %.2f \n" % self.rowmean
-        txt += "Value: %.2f \n" % self.val
+        txt += "total mean \n    %.4f \n" % self.mean
+        txt += "row mean \n    %.4f \n" % self.rowmean
+        txt += "Value: %.4f \n" % self.val
         self.display.suptitle(self.datalist[self.current_index].filepath)
         self.Txt.set_text(txt);
             
@@ -763,7 +768,7 @@ def loadAllMeasurementsGoogleDocs(allmeasurements, login, sheetkey, Verbose = Fa
                                 
                         if Verbose:
                             print("Loading measurement", m)
-def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 80, pre = 12):
+def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 80, pre = 12, undisturbed = (30,50)):
     print(" --- Loading measurement from google docs --- ")
     sh = login.open_by_key(sheetkey)
     worksheets = sh.worksheets()
@@ -804,8 +809,13 @@ def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetke
                         slice = ([int(m.point[1] - vertical*m.scale) , int(m.point[1] + vertical*m.scale)], 
                                  [int(m.point[0] - trailing*m.scale), int(m.point[0] + pre*m.scale)], 
                                  [int(v) for v in row[5:7]])
+                        _undisturbed = ([int(m.point[1] + undisturbed[0]*m.scale), int(m.point[1] + undisturbed[1]*m.scale)], 
+                                       [int(m.point[1] - undisturbed[1]*m.scale), int(m.point[1] - undisturbed[0]*m.scale)])
                         m.slice = slice
-                        print("Slice", m.slice)
+                        m.undisturbed = _undisturbed
+                        if Verbose:
+                            print("Slice", m.slice)
+                            print("Undisturbed", m.undisturbed)
 def loadAllMeasurementsGoogleDocsNoSlicing(allmeasurements, login, sheetkey, Verbose = False):
     print(" --- Loading measurement from google docs --- ")
     sh = login.open_by_key(sheetkey)
@@ -869,6 +879,18 @@ def findMeasurementDataFromFilename(all_measurements, fname, leading_edge = slic
 
 
 def main_loadgoogle(allMeasurements):
+    
+    
+    t = 0.00039999998989515007 
+    rho = 0.0004495114372566317 
+    c = 1005 
+    k = 1.4 
+    dt1 = np.array([ 0., 0.00307481, -0.005996,    0.00522731, -0.00061496,  0.43048938, \
+                   0.40421411,  0.15344358,  0.18690944,  0.2201325,   0.20294551,  0.19625714, \
+                   0.20864527,  0.22018654,  0.24443638,  0.228085,    0.23038194,  0.26600715, \
+                   0.25055069,  0.24066542,  0.27106,     0.25178359])
+    
+    
     gc = gspread.login("D07TAS", "hypersonicroughness")
         
     
@@ -911,7 +933,14 @@ def main_calculate_and_save_q_all_memory_efficient(test_measurements):
         m.saveQ()
         m.unload()
         
- 
+
+def maxAverage(data):
+    t = np.mean(data, 0)
+    t = np.mean(t,0)
+    print(t.shape)
+    print(t, np.argmax(t))
+    return np.argmax(t)
+
 def main_keep_only_last_q(test_measurements):
     simple_measurements = []
     for m in test_measurements:
@@ -921,7 +950,12 @@ def main_keep_only_last_q(test_measurements):
             l = True
             m.load()
             m.readSlice()
-        simple_measurements.append(Measurements.simple_measurement(m))
+        tdat = m.data.ml_relq
+        tdat = tdat - 1
+        for t in range(1,tdat.shape[2]):
+            tdat[:,:,t] = tdat[:,:,t] / t
+        #
+        simple_measurements.append(Measurements.simple_measurement(m, tdat))
         if l:
             m.unload()
     return simple_measurements
@@ -998,23 +1032,25 @@ def onGoingAnalysis(test_measurements):
 def main():
 
 
-
     
     filename = "half_sphere_r_2_100bar_run2.ptw"
     allMeasurements = Measurements.all_measurements(("H:/AE2223-II/3cm_LE/","H:/AE2223-II/6cm_LE/"))
     main_loadgoogle(allMeasurements)
     
-    #m = convNameData(filename, 30)
-    #m.slice = ((90, 180), (120, 300), (29, 48))
-    #allMeasurements.add_measurement(m)
     print(len(allMeasurements))
     print("loaded google docs")
     #test_measurements = allMeasurements.get_measurements(LE=60)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=30)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=60)
     #test_measurements = allMeasurements.get_measurements("cylinder",2.85,LE=30)
-    test_measurements = allMeasurements.get_measurements()
-    main_calculate_and_save_q_all_memory_efficient(test_measurements)
+    test_measurements = allMeasurements.get_measurements(fname = filename, LE=30)
+    print(len(test_measurements))
+    #reduced_measurements = main_keep_only_last_q(test_measurements)
+    #main_show_reduced_measurements(reduced_measurements)
+    main_load_data(test_measurements)
+    main_show_measurements(test_measurements)
+    
+    #main_calculate_and_save_q_all_memory_efficient(test_measurements)
     #test_measurements.extend(allMeasurements.get_measurements( size=2, height=2, pressure=100, LE=60)  )
     """
         Item access
@@ -1026,7 +1062,7 @@ def main():
         @param fname: filepath. If fname is given, loads the specific filenames and ignores other params  
         @return: List of measurements fitting criteria
         """
-    print(len(test_measurements))
+    
     
 
         

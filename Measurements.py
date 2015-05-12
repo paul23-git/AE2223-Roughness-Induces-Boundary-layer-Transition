@@ -6,13 +6,14 @@ import numpy as np
 import ptw
 import Data_Reduction
 import operator
+import weakref
 
 class measurement(object):
     """
     Measurement object contains all data relevant to a measurement
     """ 
     
-    def __init__(self, filepath, shape, size, height, pressure, LE, measurement_slice=None, point = (0,0), scale = 1):
+    def __init__(self, filepath, shape, size, height, pressure, LE, measurement_slice=None, point = (0,0), scale = 1, undisturbed = None):
         """
         Initializes a measurement object, keeps track of all measurements and other data
         @param filepath: filepath
@@ -25,31 +26,50 @@ class measurement(object):
         """ 
         self.shape = shape
         self.size = size
-        self._pressure = pressure *100000
+        self._pressure = 0.28*pressure *100000
         self._filepath = filepath
         self.height = height
         self.slice = measurement_slice
+        self._undisturbed = undisturbed
         self.leading_edge_distance = LE
         self._gamma = 1.4
         self._R = 287.05 
         self._M = 7.5 #mach
         self._T0 = 775 #kelvin
         self._mu0 = 0.00001827
+        self._cp = 1005
         self._C = 120
+        
         self._chord = 1 #meters
         self.point = point #abs px
         self.scale = scale #px/mm
+
         self._a = np.sqrt(self.gamma*self.R*self.T0) #speed of sound
-            
+        
         self.possibleCalculations = (lambda:self.data.data, 
                         lambda:self.data.ml_temp, 
-                        lambda:self.data.ml_delta_temp,
-                        lambda:self.data.ml_q)
-        self.possibleCalculationNames = ("Raw Data", "Matlab Temp", "Matlab Delta","Matlab q")
+                        lambda:self.data.ml_q,
+                        lambda:self.data.ml_re,
+                        lambda:self.data.ml_relq)
+        self.possibleCalculationNames = ("Raw Data", "Matlab Temp", "Matlab q","Matlab Reynolds","Norm q value")
         self._data = None
         
         # calculate and insert other flow & measurement parameters here!
-    
+    @property
+    def cp(self):
+        return self._cp   
+    @property
+    def mu0(self):
+        return self._mu0
+    @property
+    def C(self):
+        return self._C
+    @property 
+    def a(self):
+        return self._a
+    @property
+    def chord(self):
+        return self._chord
            
     @property
     def gamma(self):
@@ -75,10 +95,10 @@ class measurement(object):
         return self.pressure_pascal()*(1+(self.gamma-1)/2*self.M**2)**(-self.gamma/(self.gamma-1))
     
     def pressure_bar(self):
-        return pressure/100000
+        return self._pressure/100000
    
     def pressure_pascal(self):
-        return pressure
+        return self._pressure
     
     @property
     def offsets(self):
@@ -92,11 +112,20 @@ class measurement(object):
         self._filepath = newpath
     
     @property
+    def undisturbed(self):
+        return self._undisturbed
+    @undisturbed.setter
+    def undisturbed(self, undisturbed):
+        self._undisturbed = undisturbed
+        if self.data is not None:
+            self.data.makeUndisturbedData(self._undisturbed)
+    
+    @property
     def data(self):
         return self._data
     def load(self):
         if os.path.exists(self.filepath):
-            self._data = ptw.ptw_file(self.filepath, qfilename = self.qFilename())
+            self._data = ptw.ptw_file(self.filepath, qfilename = self.qFilename(), measurement=weakref.ref(self))
         else:
             print("File not found", self.filepath)
             self._data = None
@@ -105,7 +134,7 @@ class measurement(object):
         Data_Reduction.data_reduction_constant_time.preCalcedPeriods = {}
     def readSlice(self):
         if self.data is not None:
-            self.data.readSlice(self.slice)
+            self.data.readSlice(self.slice, self.undisturbed)
     def qFilename(self):
         fpath, p = os.path.split(self.filepath)
         fname, ext = os.path.splitext(p)
@@ -130,7 +159,7 @@ class simple_measurement(object):
     Measurement object contains all data relevant to a measurement
     """ 
     
-    def __init__(self, measurement, data = None):
+    def __init__(self, measurement, data = None, index_lambda = None):
         """
         Initializes a measurement object, keeps track of all measurements and other data
         @param filepath: filepath
@@ -153,20 +182,26 @@ class simple_measurement(object):
         self._T0 = 775 #kelvin
         self._mu0 = 0.00001827
         self._C = 120
+        self._cp = 1005
         self._chord = 1 #meters
         self.point = measurement.point #abs px
         self.scale = measurement.scale #px/mm
         self._a = np.sqrt(self.gamma*self.R*self.T0) #speed of sound
         self.offsets = measurement.offsets[:-1]
+        self.ind = -1
+        if index_lambda is not None:
+            ind = index_lambda(data)
         
-        if data == None:
-            self._data = measurement.data.ml_q[:,:,-1]
+        if data is None:
+            self._data = measurement.data.data[:,:,self.ind]
         else:
-            self._data = data[:,:,-1]
+            self._data = data[:,:,self.ind]
         
         # calculate and insert other flow & measurement parameters here!
     
-           
+    @property
+    def cp(self):
+        return self._cp       
     @property
     def gamma(self):
         return self._gamma

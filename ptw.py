@@ -4,10 +4,8 @@ import os.path
 from scipy import interpolate
 import numpy as np
 import Data_Reduction
-
-
-
-#from PyQt4 import QtGui
+import weakref
+from numpy import inf
 
 class ptw_file(object):
 	class Deferred(object):
@@ -23,7 +21,7 @@ class ptw_file(object):
 				self._initialized = True
 			return self._value
 	
-	def __init__(self, filename=None, copyFrom=None, slice = None, qfilename = None): #Reads the file header and obtains info on the file
+	def __init__(self, filename=None, undisturbed=None, copyFrom=None, slice = None, qfilename = None, measurement = None): #Reads the file header and obtains info on the file
 		#maintenance variables
 		self._py_temp = self.Deferred(self.python_convert)
 		self._ml_temp = self.Deferred(self.matlab_convert_helper)
@@ -31,12 +29,25 @@ class ptw_file(object):
 		self._ml_delta_temp =self.Deferred(self.calcDeltaTML)
 		self._ml_py_diff = self.Deferred(self.calcMLPyDiff)
 		self._ml_q = self.Deferred(self.calcQML)
+		self._ml_re = self.Deferred(self.calcReML)
+		self._ml_relq = self.Deferred(self.calcRelQML)
+		self._undisturbed_ml_temp = self.Deferred(self.calcTempML_U)
+		self._undisturbed_ml_delta_temp = self.Deferred(self.calcDeltaTML_U)
+		self._undisturbed_ml_q = self.Deferred(self.calcQML_U) 
+		
+		
+						
 		self._data = None
+		self._undisturbedData = None
 		self._offsets = (0,0,0)
 		self.qfilename = qfilename
+		self.measurement = measurement
 		if filename is not None:
 			self.loadFile(filename)
+			if undisturbed is not None:
+				self.makeUndisturbedData(undisturbed)
 		elif copyFrom is not None and slice is not None:
+			
 			self.fname = copyFrom.fname
 			self.MainHeaderSize = copyFrom.MainHeaderSize
 			self.FrameHeaderSize = copyFrom.FrameHeaderSize
@@ -59,6 +70,7 @@ class ptw_file(object):
 			#self._data = imarray_backend(xtup[0], ytup[0], timetup[0], xtup[1]-xtup[0], ytup[1] - ytup[0], timetup[1] - timetup[0])
 			self._offsets = [x[0] + x[1][0] for x in zip(self._offsets, slice)]#(xtup[0], ytup[0], timetup[0])
 			self.data = copyFrom.data[xtup[0]:xtup[1], ytup[0]:ytup[1], timetup[0]:timetup[1]]
+			self._undisturbedData = copyFrom._undisturbedData[ytup[0]:ytup[1], timetup[0]:timetup[1]]
 			self.depth = timetup[1] - timetup[0]
 			
 	def sliceSelf(self, slice):
@@ -66,6 +78,7 @@ class ptw_file(object):
 		self.depth = timetup[1] - timetup[0]
 		self._offsets = tuple(x[0] + x[1][0] for x in zip(self._offsets, slice))
 		self._data = self._data[xtup[0]:xtup[1], ytup[0]:ytup[1], timetup[0]:timetup[1]]
+		self._undisturbedData = self._undisturbedData[ytup[0]:ytup[1], timetup[0]:timetup[1]]
 		#self.offsets = [xtup[0], ytup[0], timetup[0]]
 
 	def loadFile(self, filename):
@@ -137,6 +150,14 @@ class ptw_file(object):
 		
 		fileobj.close()
 	
+	def makeUndisturbedData(self, undisturbed):
+		top = undisturbed[0]
+		bot = undisturbed[1]
+		t = np.concatenate((self.data[top[0]:top[1],:,:], self.data[bot[0]:bot[1],:,:]), 0)
+		self._undisturbedData = np.mean(t,0)
+		
+	
+	
 	def read(self,framepointer): #Reads the _data from the file
 		print("--- Reading frames _data ---")
 		fileobj = open(self.fname, mode='rb')
@@ -174,9 +195,10 @@ class ptw_file(object):
 	
 	def matlab_convert_helper(self):
 		return ptw_file.matlab_convert(self.dataRaw(),self.integration, 22.4+273.15, 0.86)
+	def calcTempML_U(self):
+		return ptw_file.matlab_convert(self._undisturbedData,self.integration, 22.4+273.15, 0.86)
 
-
-	def readSlice(self, slice):
+	def readSlice(self, slice, undisturbed = None):
 		print("--- Reading frames data ---")
 		if slice is not None:
 			xtup, ytup, timetup = slice
@@ -200,12 +222,16 @@ class ptw_file(object):
 			self._data[:,:,n] = data_dum
 		fileobj.close()
 		
+		if undisturbed is not None:
+			self.makeUndisturbedData(undisturbed)
+		
 		
 		#slicing
 		self.depth = l		
 		self._offsets = tuple(x[0] + x[1][0] for x in zip(self._offsets, (xtup, ytup, timetup)))
 		self._data = self._data[xtup[0]:xtup[1], ytup[0]:ytup[1], :]
-
+		if self._undisturbedData is not None:
+			self._undisturbedData = self._undisturbedData[ytup[0]:ytup[1], :]
 		
 		
 		return self._data
@@ -220,25 +246,35 @@ class ptw_file(object):
 	
 
 	def calcDeltaTML(self):
-		print("--- Calculating dT matlab _data ---")
+		print("--- Calculating dT matlab data ---")
 		t = np.zeros([self.ml_temp.shape[0], self.ml_temp.shape[1], 1])
 		v  = np.concatenate((t, self.ml_temp[:,:,1:] - self.ml_temp[:,:,:-1]), axis=2 )
 		
 		print("--- dT done ---")
 		return v
-	
+	def calcDeltaTML_U(self):
+		temp = self.undisturbed_ml_temp
+		return self.diffHelper(temp)
+	def diffHelper(self, temp):
+		tmp = list(temp.shape)
+		tmp[-1] = 1
+		
+		t = np.zeros(tmp)
+		v  = np.concatenate((t, temp[...,1:] - temp[...,:-1]), axis=len(tmp)-1 )
+		return v
+
 	def calcMLPyDiff(self):
 		print("--- Calculating matlab-python difference ---")
 		v = self.py_temp - self.ml_temp
 		print("--- Diff done ---")
 		return v
+
   
  
 	def calcQML(self):
 		print("--- Calculating q ---")
 		if os.path.exists(self.qfilename):
 			try:
-				
 				qFileObj = open(self.qfilename, mode = "rb")
 				readoff = np.fromfile(qFileObj, dtype = np.int32, count=3)
 				readshape = np.fromfile(qFileObj, dtype = np.int32, count=3)
@@ -252,30 +288,79 @@ class ptw_file(object):
 				qFileObj.close()
 		return self.calcQML_Backup()
 				
+	def calcReML(self):
+		print("--- Calculation Reynolds ---")
+		m = self.measurement()
+		T = self.ml_temp*(1+(m.gamma-1)/2*m.M**2)**-1
+		P = m.static_pressure
+		C=120
+		rho = P/(m.R*T) #density
+		T0 = m.T0
+		mu = m.mu0*(T0+C)/(T+C)*(T/T0)**1.5
+		v = mu/rho #dynamic viscosity
+		return m.V*m.chord/v
+		
 			
 	def calcQML_Backup(self):
 		print ("%i iterations" % int(self.data.shape[0] * self.data.shape[1] * self.data.shape[2] * (self.data.shape[2]+1)/2))
 		v = np.zeros(self.ml_delta_temp.shape)
-		T = 590
-		P = 28 * 100000
-		R = 287
-		c = 1005
-		k = 1.4
-		q = 20
-	
+		m = self.measurement()
+		T = m.T0
+		P = m.pressure_pascal()
+		
+		print(P)
+		R = m.R
+		c = m.cp
+		k = 0.03#m.gamma
+		gamma = m.gamma
+		M = m.M
+		M_inf = 6.49
 	    #compute rho
-		rho = P/(R*T)  
-		for x in range((self.ml_delta_temp.shape[0])):
+		rho = P/(R*T)
+		rho_static = rho * ((gamma + 1.)*M**2)/((gamma-1.)*M**2+2.)
+		rho_total = rho * (1 + (gamma - 1.)/2.* M_inf**2)**(1./(gamma-1))
+		rho_total_inf = rho_static * (1 + (gamma - 1.)/2.* M_inf**2)**(1./(gamma-1))
+		for x in range(v.shape[0]):
 			print ("calculating column: ", x)
 			for y in range((self.ml_delta_temp.shape[1])):
-				#print ("calculating point", x, y)
 				v_tmp = Data_Reduction.data_reduction_constant_time(self.ml_delta_temp[x,y,:], 
 																self.integration,
-																rho, c, k)
+																rho_static, c, k)
 				v[x,y,:] = v_tmp
-		print(v.shape)
+		#v = np.cumsum(self.integration * v, 2)
 		print("--- q done ---")
 		return v
+	def calcQML_U(self):
+		v = np.zeros(self.undisturbed_ml_delta_temp.shape)
+		m = self.measurement()
+		T = m.T0
+		P = m.pressure_pascal()
+		R = m.R
+		c = m._cp
+		k = m.gamma
+	    #compute rho
+		rho = P/(R*T)  
+		print("----------- reference -----------")
+		for y in range((v.shape[0])):
+			v_tmp = Data_Reduction.data_reduction_constant_time(self.undisturbed_ml_delta_temp[y,:], 
+															self.integration,
+															rho, c, k)
+			v[y,:] = v_tmp
+		#v = np.cumsum(self.integration * v, 1)
+		return v
+		
+	def calcRelQML(self):
+		print("--- dividing q ---")
+		v = np.zeros(self.ml_q.shape)
+		for x in range(v.shape[0]):
+			for y in range(v.shape[1]):
+				for t in range(v.shape[2]):
+					if self.undisturbed_ml_q[y,t] != 0:
+						v[x,y,t] = self.ml_q[x,y,t] / self.undisturbed_ml_q[y,t]
+		print("--- dividing q done ---")
+		return v
+			
+
 
 	def python_convert(self): #Convert the raw _data to temperatures
 		print("--- Converting (python way) ---")
@@ -332,6 +417,9 @@ class ptw_file(object):
 	@data.setter
 	def data(self, numpy_array):
 		self._data = numpy_array
+	@property
+	def undisturbedData(self):
+		return self._undisturbedData
 
 	@property
 	def offsets(self):
@@ -348,7 +436,7 @@ class ptw_file(object):
 		if self._data is not None:
 			return self._py_temp()
 		else:
-			return None
+			return Non
 
 	@property
 	def ml_temp(self):
@@ -356,6 +444,13 @@ class ptw_file(object):
 			return self._ml_temp()
 		else:
 			return None
+	@property
+	def undisturbed_ml_temp(self):
+		if self._data is not None:
+			return self._undisturbed_ml_temp()
+		else:
+			return None
+	
 	
 	@property
 	def py_delta_temp(self):
@@ -363,6 +458,8 @@ class ptw_file(object):
 			return self._py_delta_temp()
 		else:
 			return None
+	
+
 
 	@property
 	def ml_delta_temp(self):
@@ -370,6 +467,13 @@ class ptw_file(object):
 			return self._ml_delta_temp()
 		else:
 			return None
+	@property
+	def undisturbed_ml_delta_temp(self):
+		if self._data is not None:
+			return self._undisturbed_ml_delta_temp()
+		else:
+			return None
+	
 	@property
 	def ml_py_diff(self):
 		if self._data is not None:
@@ -381,5 +485,25 @@ class ptw_file(object):
 	def ml_q(self):
 		if self._data is not None:
 			return self._ml_q()
+		else:
+			return None
+	@property
+	def ml_relq(self):
+		if self._data is not None:
+			return self._ml_relq()
+		else:
+			return None
+	@property
+	def undisturbed_ml_q(self):
+		if self._data is not None:
+			return self._undisturbed_ml_q()
+		else:
+			return None
+	
+	
+	@property
+	def ml_re(self):
+		if self._data is not None:
+			return self._ml_re()
 		else:
 			return None
