@@ -953,8 +953,22 @@ def maxAverage(data):
     print(t, np.argmax(t))
     return np.argmax(t)
 
-def main_keep_only_last_q(test_measurements):
+def main_keep_only_last(test_measurements):
     simple_measurements = []
+
+    t = []
+    for m in test_measurements:
+        l = False
+        if not m.isLoaded():
+            l = True
+            m.load()
+            m.readSlice()
+        t.append(m.slice[2][1] - m.data.time_start)
+        
+        if l:
+            m.unload()
+    t = min(t)
+    
     for m in test_measurements:
         print("-----",m,"-----")
         l = False
@@ -962,9 +976,11 @@ def main_keep_only_last_q(test_measurements):
             l = True
             m.load()
             m.readSlice()
-        m.data.ml_q[:,:,-1] = analyses.addGaussianBlurAdv(m.data.ml_q[:,:,-1], m.scale*0.25,2)            
+        ind = m.data.time_start - m.offsets[2] + t - 1
+        m.data.ml_q[:,:,ind] = analyses.addGaussianBlurAdv(m.data.ml_q[:,:,ind], m.scale*0.3,2)   
+                   
         tdat = m.data.ml_binK
-        sm = Measurements.simple_measurement(m, tdat)
+        sm = Measurements.simple_measurement(m, tdat, lambda _:ind)
         simple_measurements.append(sm)
         
         if l:
@@ -1054,7 +1070,7 @@ def main():
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=30)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=60)
     #test_measurements = allMeasurements.get_measurements("cylinder",2.85,LE=30)
-    test_measurements = allMeasurements.get_measurements(size=2, height=6, pressure=100)
+    test_measurements = allMeasurements.get_measurements(size=2, height=2, pressure=100)
     """
         Item access
         @param shape: shape slice
@@ -1071,7 +1087,7 @@ def main():
    
     
     
-    reduced_measurements = main_keep_only_last_q(test_measurements)
+    reduced_measurements = main_keep_only_last(test_measurements)
     main_show_reduced_measurements(reduced_measurements)
     #test_measurements.extend(allMeasurements.get_measurements( size=2, height=2, pressure=100, LE=60)  )
     """

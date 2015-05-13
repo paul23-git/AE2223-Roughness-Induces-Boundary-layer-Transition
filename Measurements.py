@@ -64,7 +64,6 @@ class measurement(object):
         
         
     def calcReML(self):
-        print("--- Calculation Reynolds ---")
         m = self
         T = 61#self.ml_temp*(1+(m.gamma-1)/2*m.M**2)**-1
         P = m.static_pressure
@@ -157,7 +156,6 @@ class measurement(object):
                 self.reynolds = self.calcReML()
                 self.st_lam = Stanton.stanton_laminar(self, self.reynolds)
                 self.st_turb = Stanton.stanton_turbulent(self, self.reynolds)
-                print(self.st_lam.shape, self.st_turb.shape)
         else:
             print("File not found", self.filepath)
             self._data = None
