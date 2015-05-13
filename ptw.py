@@ -6,6 +6,7 @@ import numpy as np
 import Data_Reduction
 import weakref
 from numpy import inf
+import Stanton
 
 class ptw_file(object):
 	class Deferred(object):
@@ -29,14 +30,16 @@ class ptw_file(object):
 		self._ml_delta_temp =self.Deferred(self.calcDeltaTML)
 		self._ml_py_diff = self.Deferred(self.calcMLPyDiff)
 		self._ml_q = self.Deferred(self.calcQML)
-		self._ml_re = self.Deferred(self.calcReML)
 		self._ml_relq = self.Deferred(self.calcRelQML)
+		self._ml_st = self.Deferred(self.calcStML)
+		self._ml_K = self.Deferred(self.calcKML)
+		self._ml_binK = self.Deferred(self.calcBinaryKML)
 		self._undisturbed_ml_temp = self.Deferred(self.calcTempML_U)
 		self._undisturbed_ml_delta_temp = self.Deferred(self.calcDeltaTML_U)
 		self._undisturbed_ml_q = self.Deferred(self.calcQML_U) 
 		
 		
-						
+		self.time_start = 0
 		self._data = None
 		self._undisturbedData = None
 		self._offsets = (0,0,0)
@@ -156,7 +159,15 @@ class ptw_file(object):
 		t = np.concatenate((self.data[top[0]:top[1],:,:], self.data[bot[0]:bot[1],:,:]), 0)
 		self._undisturbedData = np.mean(t,0)
 		
-	
+	def findStartTime(self):
+		avg = np.mean(self.data, axis=0)
+		avg = np.mean(avg, axis=0)
+		base = avg[0]
+		print("------------")
+		print(avg.shape)
+		i = next(x[0] for x in enumerate(avg) if x[1] > 1.002*base)
+		self.time_start =  i - 1 + self.offsets[2]
+		return self.time_start
 	
 	def read(self,framepointer): #Reads the _data from the file
 		print("--- Reading frames _data ---")
@@ -175,6 +186,7 @@ class ptw_file(object):
 			data_dum = np.reshape(data_dum, (self.rows,self.cols))
 			self._data[:,:,n] = data_dum
 		fileobj.close()
+		self.findStartTime()
 		return self._data
 	@staticmethod
 	def matlab_convert(Im, tint, Tcam, eps):
@@ -232,8 +244,7 @@ class ptw_file(object):
 		self._data = self._data[xtup[0]:xtup[1], ytup[0]:ytup[1], :]
 		if self._undisturbedData is not None:
 			self._undisturbedData = self._undisturbedData[ytup[0]:ytup[1], :]
-		
-		
+		self.findStartTime()
 		return self._data
 
 	def calcDeltaTPy(self):
@@ -288,19 +299,30 @@ class ptw_file(object):
 				qFileObj.close()
 		return self.calcQML_Backup()
 				
-	def calcReML(self):
-		print("--- Calculation Reynolds ---")
+	def calcStML(self):
+		print("--- Calculating stanton ---")
+		v = np.zeros(self.ml_delta_temp.shape)
 		m = self.measurement()
-		T = self.ml_temp*(1+(m.gamma-1)/2*m.M**2)**-1
-		P = m.static_pressure
-		C=120
-		rho = P/(m.R*T) #density
-		T0 = m.T0
-		mu = m.mu0*(T0+C)/(T+C)*(T/T0)**1.5
-		v = mu/rho #dynamic viscosity
-		return m.V*m.chord/v
-		
-			
+		for x in range(v.shape[1]):
+			v[:,x,:] = Stanton.stanton_experiment(m.pressure_pascal(),m.reynolds[x], self.ml_q[:,x,:], m.M, m.pressure_pascal())
+		print("--- stanton done ---")
+		return v
+	
+	def calcKML(self):
+		print("--- Calculating K ---")
+		v = np.zeros(self.ml_delta_temp.shape)
+		m = self.measurement()
+		for x in range(v.shape[1]):
+			v[:,x,:] = (self.ml_st[:,x,:]-m.st_lam[x])/(m.st_turb[x]-m.st_lam[x])
+		print("--- K done ---")
+		return v
+	
+	def calcBinaryKML(self):
+		print("--- Calculating comparing ---")
+		m = self.measurement()
+		v = np.greater(self.ml_K, m.Ktresh_hold)
+		print("--- comparing done ---")
+		return v.astype(int)
 	def calcQML_Backup(self):
 		print ("%i iterations" % int(self.data.shape[0] * self.data.shape[1] * self.data.shape[2] * (self.data.shape[2]+1)/2))
 		v = np.zeros(self.ml_delta_temp.shape)
@@ -320,6 +342,10 @@ class ptw_file(object):
 		rho_static = rho * ((gamma + 1.)*M**2)/((gamma-1.)*M**2+2.)
 		rho_total = rho * (1 + (gamma - 1.)/2.* M_inf**2)**(1./(gamma-1))
 		rho_total_inf = rho_static * (1 + (gamma - 1.)/2.* M_inf**2)**(1./(gamma-1))
+		print(rho_static, c, k)
+		rho_static = 1190
+		c = 1200
+		k = 0.02
 		for x in range(v.shape[0]):
 			print ("calculating column: ", x)
 			for y in range((self.ml_delta_temp.shape[1])):
@@ -485,6 +511,24 @@ class ptw_file(object):
 	def ml_q(self):
 		if self._data is not None:
 			return self._ml_q()
+		else:
+			return None
+	@property
+	def ml_st(self):
+		if self._data is not None:
+			return self._ml_st()
+		else:
+			return None
+	@property
+	def ml_K(self):
+		if self._data is not None:
+			return self._ml_K()
+		else:
+			return None
+	@property
+	def ml_binK(self):
+		if self._data is not None:
+			return self._ml_binK()
 		else:
 			return None
 	@property

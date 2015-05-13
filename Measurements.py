@@ -7,13 +7,14 @@ import ptw
 import Data_Reduction
 import operator
 import weakref
+import Stanton
 
 class measurement(object):
     """
     Measurement object contains all data relevant to a measurement
     """ 
     
-    def __init__(self, filepath, shape, size, height, pressure, LE, measurement_slice=None, point = (0,0), scale = 1, undisturbed = None):
+    def __init__(self, filepath, shape, size, height, pressure, LE, measurement_slice=None, point = (0,0), scale = 1, undisturbed = None, Ktresh_hold = 2):
         """
         Initializes a measurement object, keeps track of all measurements and other data
         @param filepath: filepath
@@ -35,10 +36,11 @@ class measurement(object):
         self._gamma = 1.4
         self._R = 287.05 
         self._M = 7.5 #mach
-        self._T0 = 775 #kelvin
+        self._T0 = 579#775 #kelvin
         self._mu0 = 0.00001827
         self._cp = 1005
         self._C = 120
+        self.Tw = 290
         
         self._chord = 1 #meters
         self.point = point #abs px
@@ -49,11 +51,32 @@ class measurement(object):
         self.possibleCalculations = (lambda:self.data.data, 
                         lambda:self.data.ml_temp, 
                         lambda:self.data.ml_q,
-                        lambda:self.data.ml_re,
-                        lambda:self.data.ml_relq)
-        self.possibleCalculationNames = ("Raw Data", "Matlab Temp", "Matlab q","Matlab Reynolds","Norm q value")
+                        lambda:self.data.ml_relq,
+                        lambda:self.data.ml_st,
+                        lambda:self.data.ml_K,
+                        lambda:self.data.ml_binK)
+        self.possibleCalculationNames = ("Raw Data", "Matlab Temp", "Matlab q","Norm q value","Stanton Number","K value","ThreshHolded K")
         self._data = None
+        self.reynolds = None
+        self.st_lam = None
+        self.st_turb = None
+        self.Ktresh_hold = Ktresh_hold = 2
         
+        
+    def calcReML(self):
+        print("--- Calculation Reynolds ---")
+        m = self
+        T = 61#self.ml_temp*(1+(m.gamma-1)/2*m.M**2)**-1
+        P = m.static_pressure
+        C=120
+        rho = P/(m.R*T) #density
+        T0 = 579#m.T0
+        mu = m.mu0*(T0+C)/(T+C)*(T/T0)**1.5
+        v = mu/rho #dynamic viscosity
+        Rex = m.V*m.chord/v
+        x0 = self.data.cols - self.slice[1][0]
+        x1 = self.data.cols - self.slice[1][1] 
+        return Rex*self.scale/1000* np.array(range(x1, x0))
         # calculate and insert other flow & measurement parameters here!
     @property
     def cp(self):
@@ -100,6 +123,10 @@ class measurement(object):
     def pressure_pascal(self):
         return self._pressure
     
+    def rho_total_upstream(self):
+        return self.pressure_pascal()/(self.R*self.T0)
+    
+    
     @property
     def offsets(self):
         return (self.data.offsets[1], self.data.offsets[0], self.data.offsets[2]) 
@@ -126,6 +153,11 @@ class measurement(object):
     def load(self):
         if os.path.exists(self.filepath):
             self._data = ptw.ptw_file(self.filepath, qfilename = self.qFilename(), measurement=weakref.ref(self))
+            if self.data is not None:
+                self.reynolds = self.calcReML()
+                self.st_lam = Stanton.stanton_laminar(self, self.reynolds)
+                self.st_turb = Stanton.stanton_turbulent(self, self.reynolds)
+                print(self.st_lam.shape, self.st_turb.shape)
         else:
             print("File not found", self.filepath)
             self._data = None
@@ -189,6 +221,7 @@ class simple_measurement(object):
         self._a = np.sqrt(self.gamma*self.R*self.T0) #speed of sound
         self.offsets = measurement.offsets[:-1]
         self.ind = -1
+        self.Ktresh_hold = measurement.Ktresh_hold
         if index_lambda is not None:
             ind = index_lambda(data)
         
@@ -196,8 +229,17 @@ class simple_measurement(object):
             self._data = measurement.data.data[:,:,self.ind]
         else:
             self._data = data[:,:,self.ind]
+        self.reynolds = measurement.reynolds
+        self.st_lam = measurement.st_lam
+        self.st_turn = measurement.st_turb
+        
         
         # calculate and insert other flow & measurement parameters here!
+    
+
+        
+        
+    
     
     @property
     def cp(self):
@@ -242,6 +284,9 @@ class simple_measurement(object):
     def data(self):
         return self._data
 
+    @data.setter
+    def data(self, newdata):
+        self._data = newdata
     
     def to_absolute_pos(self, relative_pos):
         return tuple(map(operator.add,relative_pos, self.offsets))
@@ -299,6 +344,7 @@ class all_measurements(object):
                     ind.append(newk)
                 else: 
                     try:
+                        print(k, self.keys[i])
                         tst = next(j for j,v in enumerate(self.keys[i]) if v == k)
                     except StopIteration as _:
                         print("Error: trying to open inexisting index", k)
@@ -327,7 +373,7 @@ class all_measurements(object):
     
     def add_measurement(self, measurement):
 
-        li = [measurement.shape, measurement.size, measurement.height, measurement.pressure, measurement.leading_edge_distance]
+        li = [measurement.shape, measurement.size, measurement.height, measurement.pressure/0.28, measurement.leading_edge_distance]
         measurement.filepath = self.get_path(measurement.leading_edge_distance) + measurement.filepath
         ind = [0]*len(li)
         for i,k in enumerate(li):

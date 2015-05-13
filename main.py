@@ -52,7 +52,6 @@ class interface(object):
                                     extent=(0,self.actual_data.shape[1],
                                             self.actual_data.shape[0], 0
                                             ), aspect = "auto")
-        print(self.measurement.offsets, self.measurement.point)
         self.point = self.axes.plot(self.measurement.point[0]-self.measurement.offsets[0], self.measurement.point[1]-self.measurement.offsets[1], 'x', color = "white")
         min_temp = np.amin(self.actual_data)
         max_temp = np.amax(self.actual_data)
@@ -102,6 +101,10 @@ class interface(object):
         min_temp = np.amin(self.actual_data[self._xRange[0]:self._xRange[1], self._yRange[0]:self._yRange[1], self._timeRange[0]:self._timeRange[1]])
         max_temp = np.amax(self.actual_data[self._xRange[0]:self._xRange[1], self._yRange[0]:self._yRange[1], self._timeRange[0]:self._timeRange[1]])
         self.time_ver_line, = self.axTime.plot([0, 0], [min_temp, max_temp], '-', color='black',linewidth=1)
+        ts = self.measurement.data.time_start - self.measurement.offsets[2]
+        
+        print(self.measurement.data.time_start, ts)
+        self.time_start_line, = self.axTime.plot([ts, ts], [min_temp, max_temp], '-', color='0.75',linewidth=1)
         #self.
         
         bmean = np.zeros(self._timeRange[1] - self._timeRange[0])
@@ -183,13 +186,16 @@ class interface(object):
         else:
             self.rowmean = 0
             self.val = 0
-        txt = "(%.0f, %.0f, %.0f) \n" % self.measurement.data.offsets
+        txt = "(%.0f, %.0f, %.0f) \n" % self.measurement.offsets
         txt += "pos (%.0f, %.0f) \n" % self.detail_pos
         txt += "time %i \n" % int(self.current_time)
         txt += "total mean \n    %.2f \n" % self.mean
         txt += "box mean \n    %.2f \n" % self.boxmean
         txt += "row mean \n    %.2f \n" % self.rowmean
         txt += "Value: %.4f \n" % self.val
+        if self.detail_line is not None:
+            txt += "St (%.5f, %.5f) \n" % (self.measurement.st_lam[self.detail_pos[0]], self.measurement.st_turb[self.detail_pos[0]])
+            txt += "Re (%.5f) \n" % (self.measurement.reynolds[self.detail_pos[0]])
         self.Txt.set_text(txt);
             
         
@@ -547,6 +553,8 @@ class lastFrameInterface(object):
                                     extent=(0,self.actual_data.shape[1],
                                             self.actual_data.shape[0], 0
                                             ), aspect="auto")
+        self._xRange = (0, 0+self.actual_data.shape[0])
+        self._yRange = (0, 0+self.actual_data.shape[1])
         self.point.set_data(m.point[0]-m.offsets[0], m.point[1]-m.offsets[1])
         self.axes.set_xlim([0,self.actual_data.shape[1]])
         self.axes.set_ylim([0, self.actual_data.shape[0]])
@@ -768,7 +776,7 @@ def loadAllMeasurementsGoogleDocs(allmeasurements, login, sheetkey, Verbose = Fa
                                 
                         if Verbose:
                             print("Loading measurement", m)
-def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 80, pre = 12, undisturbed = (30,50)):
+def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 15, trailing = 70, pre = 10, undisturbed = (30,50)):
     print(" --- Loading measurement from google docs --- ")
     sh = login.open_by_key(sheetkey)
     worksheets = sh.worksheets()
@@ -925,12 +933,16 @@ def main_calculate_and_save_q(test_measurements):
         print("-----",m,"-----")
         m.saveQ()
 def main_calculate_and_save_q_all_memory_efficient(test_measurements):
+    t = len(test_measurements)
+    i = 0
     for m in test_measurements:
-        print("-----",m,"-----")
+        i+=1
+        print("-----",m,i,t,"-----")
         m.load()
-        m.readSlice()
-        m.data.ml_q
-        m.saveQ()
+        if m.data is not None:
+            m.readSlice()
+            m.data.ml_q
+            m.saveQ()
         m.unload()
         
 
@@ -950,12 +962,11 @@ def main_keep_only_last_q(test_measurements):
             l = True
             m.load()
             m.readSlice()
-        tdat = m.data.ml_relq
-        tdat = tdat - 1
-        for t in range(1,tdat.shape[2]):
-            tdat[:,:,t] = tdat[:,:,t] / t
-        #
-        simple_measurements.append(Measurements.simple_measurement(m, tdat))
+        m.data.ml_q[:,:,-1] = analyses.addGaussianBlurAdv(m.data.ml_q[:,:,-1], m.scale*0.25,2)            
+        tdat = m.data.ml_binK
+        sm = Measurements.simple_measurement(m, tdat)
+        simple_measurements.append(sm)
+        
         if l:
             m.unload()
     return simple_measurements
@@ -967,8 +978,7 @@ def addGaussianBlur(data):
     gauss = 1/16*np.array([[1,2,1],[2,4,2],[1,2,1]])
     return ndimage.convolve(data, gauss, mode = "nearest")
 
-def gaussian2d(rsquared, sigma):
-    return np.exp(- rsquared / (2 * sigma**2))
+
     
 
 def addGaussianBlurAdv(data, sigma, maxradius):
@@ -1034,6 +1044,7 @@ def main():
 
     
     filename = "half_sphere_r_2_100bar_run2.ptw"
+    filename2 = "cylinder_r_2_h_2_100bar_run2.ptw"
     allMeasurements = Measurements.all_measurements(("H:/AE2223-II/3cm_LE/","H:/AE2223-II/6cm_LE/"))
     main_loadgoogle(allMeasurements)
     
@@ -1043,14 +1054,25 @@ def main():
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=30)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=60)
     #test_measurements = allMeasurements.get_measurements("cylinder",2.85,LE=30)
-    test_measurements = allMeasurements.get_measurements(fname = filename, LE=30)
-    print(len(test_measurements))
-    #reduced_measurements = main_keep_only_last_q(test_measurements)
-    #main_show_reduced_measurements(reduced_measurements)
-    main_load_data(test_measurements)
-    main_show_measurements(test_measurements)
+    test_measurements = allMeasurements.get_measurements(size=2, height=6, pressure=100)
+    """
+        Item access
+        @param shape: shape slice
+        @param size: size slice
+        @param height: height slice
+        @param pressure: pressure slice
+        @param LE: leading edge slice
+        @param fname: filepath. If fname is given, loads the specific filenames and ignores other params  
+        @return: List of measurements fitting criteria
+    """
     
-    #main_calculate_and_save_q_all_memory_efficient(test_measurements)
+    print(len(test_measurements))
+    
+   
+    
+    
+    reduced_measurements = main_keep_only_last_q(test_measurements)
+    main_show_reduced_measurements(reduced_measurements)
     #test_measurements.extend(allMeasurements.get_measurements( size=2, height=2, pressure=100, LE=60)  )
     """
         Item access
@@ -1061,7 +1083,7 @@ def main():
         @param LE: leading edge slice
         @param fname: filepath. If fname is given, loads the specific filenames and ignores other params  
         @return: List of measurements fitting criteria
-        """
+    """
     
     
 
