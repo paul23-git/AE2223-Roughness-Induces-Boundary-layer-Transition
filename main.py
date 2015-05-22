@@ -376,19 +376,27 @@ class interface(object):
     def createSubFigure(self, axes):
         ftemp = plt.figure()
         ax = ftemp.add_subplot("111")
+        
+        label = "Heat flux $[J s^{-1}]$"
+        
         if axes == self.axes:
-            ax.imshow(self.actual_data[:,:,self.current_time], interpolation='none', aspect = "auto")
+            d = self.actual_data[:,:,self.current_time]
+            i = ax.imshow(d, interpolation='none', aspect = "auto")
+            cb = ftemp.colorbar(i)
+            ax.set_ylabel("Vertical position $[px]$")
+            ax.set_xlabel("Horizontal position $[px]$")
+            cb.set_label(label)
         elif axes == self.axDetail and self.detail_line is not None:
             xrange = range(*self._yRange)
             yrange = self.actual_data[self.detail_pos[1], : , self.current_time]
-            ax.set_ylabel("Temp")
-            ax.set_xlabel("Horizontal position")
+            ax.set_ylabel(label)
+            ax.set_xlabel("Horizontal position $[px]$")
             ax.plot(xrange, yrange)
         elif axes == self.axColumn and self.column_line is not None:
             xrange = range(*self._xRange)
             yrange = self.actual_data[:, self.detail_pos[0] , self.current_time]
-            ax.set_ylabel("Temp")
-            ax.set_xlabel("Vertical position")
+            ax.set_ylabel(label)
+            ax.set_xlabel("Vertical position $[px]$")
             ax.plot(xrange,yrange)
         elif axes == self.axTime:
             trange = range(*self._timeRange)
@@ -776,7 +784,7 @@ def loadAllMeasurementsGoogleDocs(allmeasurements, login, sheetkey, Verbose = Fa
                                 
                         if Verbose:
                             print("Loading measurement", m)
-def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 15, trailing = 70, pre = 10, undisturbed = (30,50)):
+def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 200, pre = 18, undisturbed = (30,50)):
     print(" --- Loading measurement from google docs --- ")
     sh = login.open_by_key(sheetkey)
     worksheets = sh.worksheets()
@@ -813,9 +821,9 @@ def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetke
                                 m.scale = s
                             except ValueError as E:
                                 pass
- 
+                        minxval = max(m.point[0] - trailing*m.scale, 0)                        
                         slice = ([int(m.point[1] - vertical*m.scale) , int(m.point[1] + vertical*m.scale)], 
-                                 [int(m.point[0] - trailing*m.scale), int(m.point[0] + pre*m.scale)], 
+                                 [int(minxval), int(m.point[0] + pre*m.scale)], 
                                  [int(v) for v in row[5:7]])
                         _undisturbed = ([int(m.point[1] + undisturbed[0]*m.scale), int(m.point[1] + undisturbed[1]*m.scale)], 
                                        [int(m.point[1] - undisturbed[1]*m.scale), int(m.point[1] - undisturbed[0]*m.scale)])
@@ -979,7 +987,7 @@ def main_keep_only_last(test_measurements):
         ind = m.data.time_start - m.offsets[2] + t - 1
         m.data.ml_q[:,:,ind] = analyses.addGaussianBlurAdv(m.data.ml_q[:,:,ind], m.scale*0.3,2)   
                    
-        tdat = m.data.ml_binK
+        tdat = m.data.ml_K
         sm = Measurements.simple_measurement(m, tdat, lambda _:ind)
         simple_measurements.append(sm)
         
@@ -988,79 +996,32 @@ def main_keep_only_last(test_measurements):
     return simple_measurements
     
         
-
-        
-def addGaussianBlur(data):
-    gauss = 1/16*np.array([[1,2,1],[2,4,2],[1,2,1]])
-    return ndimage.convolve(data, gauss, mode = "nearest")
-
-
+def groupMeasurementData(m_data_list):
+    d = {}
+    for m_data in m_data_list:
+        m = m_data[0]
+        name = m.filepath[:-9]
+        data = m_data[1]
+        if name in d:
+            d[name].append((data, m))
+        else:
+            d[name] = [(data, m)]
+    return d
+def combineMeasurementData(m_data_list):
+    d = groupMeasurementData(m_data_list)
+    for i in d:
+        v = d[i]
+        d[i] = (np.mean(v, 1), v[1])
     
-
-def addGaussianBlurAdv(data, sigma, maxradius):
-    #r = np.array([[2,1,2],[1,0,1],[2,1,2]])
-    r = np.zeros((maxradius*2+1,maxradius*2+1))
+    return [d.items()]
     
-    for ind, _ in np.ndenumerate(r):
-        r[ind] = sum((i - maxradius)**2 for i in ind)
-    gauss = gaussian2d(r, sigma)
-    print(gauss)
-    gauss = 1/np.sum(gauss) * gauss
-    
-    return ndimage.convolve(data, gauss, mode = "nearest")
-
-def syncFilter(data, cutoff, maxradius):
-    r = np.zeros((maxradius*2+1,maxradius*2+1))
-    for ind, _ in np.ndenumerate(r):
-        r[ind] = cutoff*np.sqrt(sum((i - maxradius)**2 for i in ind))
-    sincfilter = np.sinc(r)
-    sincfilter= 1/np.sum(sincfilter) * sincfilter
-    return ndimage.convolve(data, sincfilter, mode = "nearest")
-
-def addBoxBlur(data):
-    blur = 1/9*np.array([[1,1,1],[1,1,1],[1,1,1]])
-    return ndimage.convolve(data, blur, mode = "nearest")
-
-
-
-def onGoingAnalysis(test_measurements):
-    simple_measurements = main_keep_only_last_q(test_measurements)
-    for m in simple_measurements:
-        line = analyses.getColumnLine(m.data)
-        rel_point = m.to_relative_pos(m.point)
-        print(m)
-        
-        #upstream only
-        tmp = m.data[:,rel_point[0]:]
-        tmpline = line[rel_point[0]:]
-        pos = m.to_absolute_pos(np.unravel_index(tmp.T.argmax(), tmp.T.shape))
-        pos = m.to_point_pos(pos)
-        print("   maximum (upstream)", np.amax(tmp), pos)
-        pos = line.argmax() + m.offsets[0] - m.point[0]
-        print("   maximum column (upstream)", np.amax(line),line.argmax(), pos)
-        
-        
-        
-        #trailing point only        
-        tmp = m.data[:,:rel_point[0]]
-        tmpline = line[:rel_point[0]]
-        pos = m.to_absolute_pos(np.unravel_index(tmp.T.argmax(), tmp.T.shape))
-        pos = m.to_point_pos(pos)
-        print("   maximum (trail)", np.amax(tmp), pos)
-        pos = line.argmax() + m.offsets[0] - m.point[0]
-        print("   maximum column (trail)", np.amax(line),line.argmax(), pos)
-        
-        
-    main_show_reduced_measurements(simple_measurements)
-
 
         
 def main():
 
-
     
     filename = "half_sphere_r_2_100bar_run2.ptw"
-    filename2 = "cylinder_r_2_h_2_100bar_run2.ptw"
+    filename2 = "cylinder_r_2_h_2_100bar_run1.ptw"
     allMeasurements = Measurements.all_measurements(("H:/AE2223-II/3cm_LE/","H:/AE2223-II/6cm_LE/"))
     main_loadgoogle(allMeasurements)
     
@@ -1069,8 +1030,12 @@ def main():
     #test_measurements = allMeasurements.get_measurements(LE=60)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=30)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=60)
-    #test_measurements = allMeasurements.get_measurements("cylinder",2.85,LE=30)
-    test_measurements = allMeasurements.get_measurements(size=2, height=2, pressure=100)
+    test_measurements = allMeasurements.get_measurements(LE=30, fname = filename2)
+    #test_measurements.extend(allMeasurements.get_measurements("cylinder", size=4, pressure=100, LE=30))
+    #test_measurements.extend(allMeasurements.get_measurements(size=5.6, height=2, pressure=100, LE=30))
+    #test_measurements.extend(allMeasurements.get_measurements(shape = "cylinder", size=4, pressure=100, LE=30))
+    #test_measurements = allMeasurements.get_measurements()#(fname=filename2, LE=30)
+    
     """
         Item access
         @param shape: shape slice
@@ -1083,30 +1048,34 @@ def main():
     """
     
     print(len(test_measurements))
-    
    
+    main_load_data(test_measurements)
+    #main_show_measurements(test_measurements)
     
     
-    reduced_measurements = main_keep_only_last(test_measurements)
-    main_show_reduced_measurements(reduced_measurements)
-    #test_measurements.extend(allMeasurements.get_measurements( size=2, height=2, pressure=100, LE=60)  )
-    """
-        Item access
-        @param shape: shape slice
-        @param size: size slice
-        @param height: height slice
-        @param pressure: pressure slice
-        @param LE: leading edge slice
-        @param fname: filepath. If fname is given, loads the specific filenames and ignores other params  
-        @return: List of measurements fitting criteria
-    """
+    
+    m = test_measurements[0]
+    exp_st = m.data.ml_st[:,:,-1]
+    exp_st2 = m.data.ml_st[:,:,-m.data.ml_st.shape[2]/2]
+    
+    d1 = exp_st[exp_st.shape[0]/2+10,:]#analyses.getColumnLine(exp_st)
+    d2 = exp_st2[exp_st2.shape[0]/2+10,:]#analyses.getColumnLine(exp_st2)
+    
+    f1 = plt.figure()
+    ax1 = f1.add_subplot("111")
+    ax1.plot(test_measurements[0].st_lam)
+    ax1.plot(test_measurements[0].st_turb)
+    ax1.plot(d1[::-1])
+    ax1.plot(d2[::-1])
+    
+    #print(c)
+
     
     
 
-        
+            
     
-    
-
+    plt.show()
     print("end")
 
 

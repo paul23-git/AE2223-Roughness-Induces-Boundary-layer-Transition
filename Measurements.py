@@ -75,7 +75,10 @@ class measurement(object):
         Rex = m.V*m.chord/v
         x0 = self.data.cols - self.slice[1][0]
         x1 = self.data.cols - self.slice[1][1] 
-        return Rex*self.scale/1000* np.array(range(x1, x0))
+        xarr = np.array(range(x1, x0) ) + 1/(2*self.scale)
+        print("-----------", self.scale, self.slice, self.data.cols, x0, x1)
+        print(xarr)
+        return Rex*self.scale/1000* xarr
         # calculate and insert other flow & measurement parameters here!
     @property
     def cp(self):
