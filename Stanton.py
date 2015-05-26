@@ -59,7 +59,7 @@ def st_Muinf(mu0, Tinf, Ttot_down):
     return mu0*((Tinf/Ttot_down)**(3/2.))*(Ttot_down+S)/(Tinf+S) 
 
 
-def stanton_experiment(phot, Rex,q, Mhot, Phot):
+def stanton_experiment(phot, q, Mhot, Phot):
     Minf = st_minf(Mhot)
     
     

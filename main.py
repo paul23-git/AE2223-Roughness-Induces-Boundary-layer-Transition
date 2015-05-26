@@ -906,7 +906,7 @@ def main_loadgoogle(allMeasurements):
     
     
 
-    loadAllMeasurementsGoogleDocsAdaptiveSlicing(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM")
+    loadAllMeasurementsGoogleDocsAdaptiveSlicing(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM", vertical = 40)
     #loadAllMeasurementsGoogleDocsNoSlicing(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM")
     print("---------------------")
 
@@ -1044,23 +1044,32 @@ def main():
     print(len(test_measurements))
    
     main_load_data(test_measurements)
-    main_show_measurements(test_measurements)
+    m = test_measurements[0]
+    for i in range(m.data.ml_q.shape[2]):
+        m.data.ml_q[:,:,i] = analyses.addGaussianBlurAdv(m.data.ml_q[:,:,i], m.scale*0.3,2) 
+    #main_show_measurements(test_measurements)
     
     
+    v = m.data.ml_st
+    m = test_measurements[0]
+    exp_st1 = v[m.data.ml_temp.shape[0]/2+10,:,-1]
+    exp_st2 = v[m.data.ml_temp.shape[0]/2+60,:,-1]
     
-    #m = test_measurements[0]
-    #exp_st = m.data.ml_st[:,:,-1]
-    #exp_st2 = m.data.ml_st[:,:,-m.data.ml_st.shape[2]/2]
+
     
-    #d1 = exp_st[exp_st.shape[0]/2+10,:]#analyses.getColumnLine(exp_st)
-    #d2 = exp_st2[exp_st2.shape[0]/2+10,:]#analyses.getColumnLine(exp_st2)
     
-    #f1 = plt.figure()
-    #ax1 = f1.add_subplot("111")
-    #ax1.plot(test_measurements[0].st_lam)
-    #ax1.plot(test_measurements[0].st_turb)
-    #ax1.plot(d1[::-1])
-    #ax1.plot(d2[::-1])
+    exp_st3 = v[m.data.ml_temp.shape[0]/2+10,:,m.data.ml_st.shape[2]/2]
+    exp_st4 = v[m.data.ml_temp.shape[0]/2+60,:,m.data.ml_st.shape[2]/2]
+    
+    
+    f1 = plt.figure()
+    ax1 = f1.add_subplot("111")
+    ax1.plot(test_measurements[0].st_lam)
+    ax1.plot(test_measurements[0].st_turb)
+    ax1.plot(exp_st1[::-1])
+    ax1.plot(exp_st2[::-1])
+    ax1.plot(exp_st3[::-1])
+    ax1.plot(exp_st4[::-1])
     
     #print(c)
 

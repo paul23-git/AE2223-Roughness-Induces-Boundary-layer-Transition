@@ -8,6 +8,8 @@ import weakref
 from numpy import inf
 import Stanton
 
+import matplotlib.pyplot as plt
+
 class ptw_file(object):
 	class Deferred(object):
 		def isIntialized(self):
@@ -303,19 +305,20 @@ class ptw_file(object):
 				
 	def calcStML(self):
 		print("--- Calculating stanton ---")
-		v = np.zeros(self.ml_delta_temp.shape)
+
 		m = self.measurement()
+		v = np.zeros(self.ml_delta_temp.shape)
 		for x in range(v.shape[1]):
-			v[:,x,:] = Stanton.stanton_experiment(m.pressure_pascal(),m.reynolds[x], self.ml_q[:,x,:], m.M, m.pressure_pascal())
+			v[:,x,:] = Stanton.stanton_experiment(m.pressure_pascal(), self.ml_q[:,x,:], m.M, m.pressure_pascal())
 		print("--- stanton done ---")
 		return v
 	
 	def calcKML(self):
 		print("--- Calculating K ---")
-		v = np.zeros(self.ml_delta_temp.shape)
-		m = self.measurement()
+		#quit()
+		l = len(m.st_lam)
 		for x in range(v.shape[1]):
-			v[:,x,:] = (self.ml_st[:,x,:]-m.st_lam[x])/(m.st_turb[x]-m.st_lam[x])
+			v[:,x,:] = (self.ml_st[:,x,:]-m.st_lam[l-1-x])/(m.st_turb[l-1-x]-m.st_lam[l-1-x])
 		print("--- K done ---")
 		return v
 	
