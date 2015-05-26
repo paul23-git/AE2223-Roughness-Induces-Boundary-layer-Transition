@@ -190,6 +190,7 @@ class ptw_file(object):
 		return self._data
 	@staticmethod
 	def matlab_convert(Im, tint, Tcam, eps):
+		print(tint, Tcam, eps)
 		if(np.round(tint*1.e6) == 400):
 		    print("--- Converting (Matlab 400 microsec) ---")
 		    elambda=np.array([2498026.51787585,1784.71556672801,6.67171636375203e-12,3215.59874368947,493144.349437419])
@@ -206,7 +207,8 @@ class ptw_file(object):
 		return Tm
 	
 	def matlab_convert_helper(self):
-		return ptw_file.matlab_convert(self.dataRaw(),self.integration, 22.4+273.15, 0.86)
+		return ptw_file.matlab_convert(self.dataRaw(),self.integration, 28+273.15, 0.86)
+		#return self.python_convert()
 	def calcTempML_U(self):
 		return ptw_file.matlab_convert(self._undisturbedData,self.integration, 22.4+273.15, 0.86)
 
@@ -326,26 +328,10 @@ class ptw_file(object):
 	def calcQML_Backup(self):
 		print ("%i iterations" % int(self.data.shape[0] * self.data.shape[1] * self.data.shape[2] * (self.data.shape[2]+1)/2))
 		v = np.zeros(self.ml_delta_temp.shape)
-		m = self.measurement()
-		T = m.T0
-		P = m.pressure_pascal()
-		
-		print(P)
-		R = m.R
-		c = m.cp
-		k = 0.03#m.gamma
-		gamma = m.gamma
-		M = m.M
-		M_inf = 6.49
-	    #compute rho
-		rho = P/(R*T)
-		rho_static = rho * ((gamma + 1.)*M**2)/((gamma-1.)*M**2+2.)
-		rho_total = rho * (1 + (gamma - 1.)/2.* M_inf**2)**(1./(gamma-1))
-		rho_total_inf = rho_static * (1 + (gamma - 1.)/2.* M_inf**2)**(1./(gamma-1))
-		print(rho_static, c, k)
 		rho_static = 1190
 		c = 1200
 		k = 0.02
+		print(rho_static, c, k)
 		for x in range(v.shape[0]):
 			print ("calculating column: ", x)
 			for y in range((self.ml_delta_temp.shape[1])):

@@ -784,7 +784,7 @@ def loadAllMeasurementsGoogleDocs(allmeasurements, login, sheetkey, Verbose = Fa
                                 
                         if Verbose:
                             print("Loading measurement", m)
-def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 200, pre = 18, undisturbed = (30,50)):
+def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 600, pre = 60, undisturbed = (30,50)):
     print(" --- Loading measurement from google docs --- ")
     sh = login.open_by_key(sheetkey)
     worksheets = sh.worksheets()
@@ -821,9 +821,12 @@ def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetke
                                 m.scale = s
                             except ValueError as E:
                                 pass
-                        minxval = max(m.point[0] - trailing*m.scale, 0)                        
-                        slice = ([int(m.point[1] - vertical*m.scale) , int(m.point[1] + vertical*m.scale)], 
-                                 [int(minxval), int(m.point[0] + pre*m.scale)], 
+                        minxval = max(int(m.point[0] - trailing * m.scale), 0)
+                        maxxval = min(int(m.point[0] + pre * m.scale), 320)       
+                        minyval = max(int(m.point[1] - vertical*m.scale), 0)
+                        maxyval = min(int(m.point[1] + vertical*m.scale), 280)       
+                        slice = ([minyval , maxyval], 
+                                 [minxval, maxxval], 
                                  [int(v) for v in row[5:7]])
                         _undisturbed = ([int(m.point[1] + undisturbed[0]*m.scale), int(m.point[1] + undisturbed[1]*m.scale)], 
                                        [int(m.point[1] - undisturbed[1]*m.scale), int(m.point[1] - undisturbed[0]*m.scale)])
@@ -896,16 +899,7 @@ def findMeasurementDataFromFilename(all_measurements, fname, leading_edge = slic
 
 def main_loadgoogle(allMeasurements):
     
-    
-    t = 0.00039999998989515007 
-    rho = 0.0004495114372566317 
-    c = 1005 
-    k = 1.4 
-    dt1 = np.array([ 0., 0.00307481, -0.005996,    0.00522731, -0.00061496,  0.43048938, \
-                   0.40421411,  0.15344358,  0.18690944,  0.2201325,   0.20294551,  0.19625714, \
-                   0.20864527,  0.22018654,  0.24443638,  0.228085,    0.23038194,  0.26600715, \
-                   0.25055069,  0.24066542,  0.27106,     0.25178359])
-    
+        
     
     gc = gspread.login("D07TAS", "hypersonicroughness")
         
@@ -1050,23 +1044,23 @@ def main():
     print(len(test_measurements))
    
     main_load_data(test_measurements)
-    #main_show_measurements(test_measurements)
+    main_show_measurements(test_measurements)
     
     
     
-    m = test_measurements[0]
-    exp_st = m.data.ml_st[:,:,-1]
-    exp_st2 = m.data.ml_st[:,:,-m.data.ml_st.shape[2]/2]
+    #m = test_measurements[0]
+    #exp_st = m.data.ml_st[:,:,-1]
+    #exp_st2 = m.data.ml_st[:,:,-m.data.ml_st.shape[2]/2]
     
-    d1 = exp_st[exp_st.shape[0]/2+10,:]#analyses.getColumnLine(exp_st)
-    d2 = exp_st2[exp_st2.shape[0]/2+10,:]#analyses.getColumnLine(exp_st2)
+    #d1 = exp_st[exp_st.shape[0]/2+10,:]#analyses.getColumnLine(exp_st)
+    #d2 = exp_st2[exp_st2.shape[0]/2+10,:]#analyses.getColumnLine(exp_st2)
     
-    f1 = plt.figure()
-    ax1 = f1.add_subplot("111")
-    ax1.plot(test_measurements[0].st_lam)
-    ax1.plot(test_measurements[0].st_turb)
-    ax1.plot(d1[::-1])
-    ax1.plot(d2[::-1])
+    #f1 = plt.figure()
+    #ax1 = f1.add_subplot("111")
+    #ax1.plot(test_measurements[0].st_lam)
+    #ax1.plot(test_measurements[0].st_turb)
+    #ax1.plot(d1[::-1])
+    #ax1.plot(d2[::-1])
     
     #print(c)
 

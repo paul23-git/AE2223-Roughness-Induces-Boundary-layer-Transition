@@ -65,11 +65,11 @@ class measurement(object):
         
     def calcReML(self):
         m = self
-        T = 61#self.ml_temp*(1+(m.gamma-1)/2*m.M**2)**-1
+        T = 61.#self.ml_temp*(1+(m.gamma-1)/2*m.M**2)**-1
         P = m.static_pressure
-        C=120
+        C=120.
         rho = P/(m.R*T) #density
-        T0 = 579#m.T0
+        T0 = 579.#m.T0
         mu = m.mu0*(T0+C)/(T+C)*(T/T0)**1.5
         v = mu/rho #dynamic viscosity
         Rex = m.V*m.chord/v
