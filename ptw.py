@@ -316,6 +316,9 @@ class ptw_file(object):
 	def calcKML(self):
 		print("--- Calculating K ---")
 		#quit()
+		
+		m = self.measurement()
+		v = np.zeros(self.ml_delta_temp.shape)
 		l = len(m.st_lam)
 		for x in range(v.shape[1]):
 			v[:,x,:] = (self.ml_st[:,x,:]-m.st_lam[l-1-x])/(m.st_turb[l-1-x]-m.st_lam[l-1-x])
