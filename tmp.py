@@ -42,6 +42,7 @@ def python_convert( Im): #Convert the raw data to temperatures
 
 tmp = np.array([[[100000]]])
 v1 = python_convert(tmp)
+v2 = matlab_convert(tmp, 0.00004, 28+273.15, 0.86)
 print(v1,v2)
 
 

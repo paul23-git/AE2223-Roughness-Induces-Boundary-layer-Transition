@@ -178,10 +178,10 @@ class measurement(object):
         return self.data is not None
 
     def to_absolute_pos(self, relative_pos):
-        return tuple(map(operator.add,relative_pos, self.offsets))
+        return tuple(map(operator.add,relative_pos, self.offsets[:2]))
     
     def to_relative_pos(self, absolute_pos):
-        return tuple(map(operator.sub,absolute_pos, self.offsets))
+        return tuple(map(operator.sub,absolute_pos, self.offsets[:2]))
     
     def to_point_pos(self, absolute_pos):
         return tuple(map(operator.sub,absolute_pos, self.point))
@@ -243,7 +243,7 @@ class simple_measurement(object):
 
         self.reynolds = measurement.reynolds
         self.st_lam = measurement.st_lam
-        self.st_turn = measurement.st_turb
+        self.st_turb = measurement.st_turb
         
         
         # calculate and insert other flow & measurement parameters here!

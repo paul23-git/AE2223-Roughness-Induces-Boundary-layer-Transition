@@ -13,6 +13,18 @@ import json
 import sys
 from oauth2client.client import SignedJwtAssertionCredentials
 
+print(sys.version_info[0])
+
+def no_encode(str):
+    return str
+if sys.version_info[0] >= 3:
+    encoder_func = str.encode
+else:
+    encoder_func = no_encode
+    
+
+
+
 class interface(object):
     def __init__(self, figure, measurement, actual_data = None):
         font = {'family' : 'sans serif',
@@ -807,7 +819,7 @@ def loadAllMeasurementsGoogleDocs(allmeasurements, login, sheetkey, Verbose = Fa
                                 
                         if Verbose:
                             print("Loading measurement", m)
-def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 125, pre = 25, undisturbed = (30,50)):
+def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 125, pre = 15, undisturbed = (30,50)):
     print(" --- Loading measurement from google docs --- ")
     sh = login.open_by_key(sheetkey)
     worksheets = sh.worksheets()
@@ -930,7 +942,7 @@ def main_loadgoogle(allMeasurements):
     json_key = json.load(open('D7TAS.json'))
     #scope = ["https://www.googleapis.com/auth/drive"]
     scope = "https://spreadsheets.google.com/feeds"
-    credentials = SignedJwtAssertionCredentials(json_key['client_email'],str.encode( json_key['private_key']),scope)
+    credentials = SignedJwtAssertionCredentials(json_key['client_email'],encoder_func( json_key['private_key']),scope)
     #gc = gspread.login("D07TAS", "hypersonicroughness")
     gc = gspread.authorize(credentials)
     print("login success")
@@ -1044,7 +1056,7 @@ def main():
     #test_measurements = allMeasurements.get_measurements(LE=60)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=30)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=60)
-    test_measurements = allMeasurements.get_measurements(shape="cylinder", size=2, height=2, pressure=60, LE=30)
+    test_measurements = allMeasurements.get_measurements(shape="square", size=2, height=2, pressure=100, LE=30)
     #test_measurements.extend(allMeasurements.get_measurements(LE=60, shape="cylinder",size=2,height=2,pressure=60))
     #test_measurements.extend(allMeasurements.get_measurements("cylinder", size=4, pressure=100, LE=30))
     #test_measurements.extend(allMeasurements.get_measurements(size=5.6, height=2, pressure=100, LE=30))
@@ -1064,7 +1076,7 @@ def main():
     
     print(len(test_measurements))
    
-    main_load_data(test_measurements)
+    #main_load_data(test_measurements)
     
     
     simple_measurements = main_keep_only_last(test_measurements, "ml_K")
@@ -1078,28 +1090,30 @@ def main():
     """
     
     
-    
+    simple_measurements2 = main_keep_only_last(test_measurements, "ml_st")
     #v = m.data.ml_st
     f1 = plt.figure()
     ax1 = f1.add_subplot("111")
     
-    for m in test_measurements:
-        v = getattr(m.data, "ml_st")
+    for m in simple_measurements2:
+        v = m.data
         x1 = m.to_relative_pos(m.point)[1]+ m.size*m.scale+3
         x2 = 0
         
         xval = (np.array(range(m.data.shape[1]))+320-m.data.shape[1]-m.offsets[0]) / m.scale
         
-        end = np.nanmean(v[:,:,(v.shape[2]-5):v.shape[2]], axis=2)
+        end = v
         exp_st3 = end[x1,:]
         exp_st4 = end[x2,:]
         
         
-
+        n = m.filepath[:-9]
         ax1.plot(xval, m.st_lam)
         ax1.plot(xval, m.st_turb)
-        ax1.plot(xval, exp_st3[::-1])
-        ax1.plot(xval, exp_st4[::-1])
+        ax1.plot(xval, exp_st3[::-1], label=os.path.split(n)[1])
+        ax1.plot(xval, exp_st4[::-1], label=os.path.split(n)[1])
+        
+        ax1.legend()
     
     
 
