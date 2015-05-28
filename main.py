@@ -9,6 +9,9 @@ import gspread
 import Data_Reduction
 import Measurements
 import analyses
+import json
+import sys
+from oauth2client.client import SignedJwtAssertionCredentials
 
 class interface(object):
     def __init__(self, figure, measurement, actual_data = None):
@@ -53,8 +56,8 @@ class interface(object):
                                             self.actual_data.shape[0], 0
                                             ), aspect = "auto")
         self.point = self.axes.plot(self.measurement.point[0]-self.measurement.offsets[0], self.measurement.point[1]-self.measurement.offsets[1], 'x', color = "white")
-        min_temp = np.amin(self.actual_data)
-        max_temp = np.amax(self.actual_data)
+        min_temp = np.nanmin(self.actual_data)
+        max_temp = np.nanmax(self.actual_data)
         self.img.set_clim(min_temp, max_temp)
         #self.maxtime = len(self.actual_data[0,0,:])-1
         self.axes.set_xlim([0,self.actual_data.shape[1]])
@@ -98,8 +101,8 @@ class interface(object):
         self.column_line = None
         self.column_ver_line = None
         dat_slice = self.actual_data[self._xRange[0]:self._xRange[1], self._yRange[0]:self._yRange[1], self._timeRange[0]:self._timeRange[1]]
-        min_temp = np.amin(self.actual_data[self._xRange[0]:self._xRange[1], self._yRange[0]:self._yRange[1], self._timeRange[0]:self._timeRange[1]])
-        max_temp = np.amax(self.actual_data[self._xRange[0]:self._xRange[1], self._yRange[0]:self._yRange[1], self._timeRange[0]:self._timeRange[1]])
+        min_temp = np.nanmin(self.actual_data[self._xRange[0]:self._xRange[1], self._yRange[0]:self._yRange[1], self._timeRange[0]:self._timeRange[1]])
+        max_temp = np.nanmax(self.actual_data[self._xRange[0]:self._xRange[1], self._yRange[0]:self._yRange[1], self._timeRange[0]:self._timeRange[1]])
         self.time_ver_line, = self.axTime.plot([0, 0], [min_temp, max_temp], '-', color='black',linewidth=1)
         ts = self.measurement.data.time_start - self.measurement.offsets[2]
         
@@ -110,7 +113,7 @@ class interface(object):
         bmean = np.zeros(self._timeRange[1] - self._timeRange[0])
         
         for t in range(self._timeRange[0], self._timeRange[1]):
-            bmean[t-self._timeRange[0]] = np.mean(self.actual_data[self._xRange[0]:self._xRange[1],
+            bmean[t-self._timeRange[0]] = np.nanmean(self.actual_data[self._xRange[0]:self._xRange[1],
                                                                 self._yRange[0]:self._yRange[1],
                                                                 t])
             
@@ -121,8 +124,8 @@ class interface(object):
         self.boxmean_line2, = self.axTime.plot(trange, bmean, color='r', linewidth=1.5)
         self.axTime.legend()
         
-        self.mean = np.mean(self.actual_data[:,:,self.current_time])
-        self.boxmean = np.mean(self.actual_data[self._xRange[0]:self._xRange[1],self._yRange[0]:self._yRange[1],self.current_time])
+        self.mean = np.nanmean(self.actual_data[:,:,self.current_time])
+        self.boxmean = np.nanmean(self.actual_data[self._xRange[0]:self._xRange[1],self._yRange[0]:self._yRange[1],self.current_time])
         self.rowmean = 0
         self.val = 0
         self.axText.set_autoscalex_on(False)
@@ -178,10 +181,10 @@ class interface(object):
             
         
     def _updateLabels(self):
-        self.mean = np.mean(self.actual_data[:,:,self.current_time])
-        self.boxmean = np.mean(self.actual_data[self._xRange[0]:self._xRange[1],self._yRange[0]:self._yRange[1],self.current_time])
+        self.mean = np.nanmean(self.actual_data[:,:,self.current_time])
+        self.boxmean = np.nanmean(self.actual_data[self._xRange[0]:self._xRange[1],self._yRange[0]:self._yRange[1],self.current_time])
         if self.detail_line is not None:
-            self.rowmean = np.mean(self.actual_data[self.detail_pos[1], : , self.current_time])
+            self.rowmean = np.nanmean(self.actual_data[self.detail_pos[1], : , self.current_time])
             self.val = self.actual_data[self.detail_pos[1], self.detail_pos[0], self.current_time]
         else:
             self.rowmean = 0
@@ -261,7 +264,7 @@ class interface(object):
     def _updateBoxMeanLine(self):
         bmean = np.zeros(len(self.actual_data[0,0,:]))
         for t in range(len(self.actual_data[0,0,:])):
-            bmean[t] = np.mean(self.actual_data[self._xRange[0]:self._xRange[1],
+            bmean[t] = np.nanmean(self.actual_data[self._xRange[0]:self._xRange[1],
                             self._yRange[0]:self._yRange[1], t])
         self.boxmean_line.set_ydata(bmean)
         self.boxmean_line.set_xdata(range(*self._timeRange))
@@ -270,7 +273,7 @@ class interface(object):
     def _updateMeanLine(self):
         tmean = np.zeros(len(self.actual_data[0,0,:]))
         for t in range(len(self.actual_data[0,0,:])):
-            tmean[t] = np.mean(self.actual_data[:,:, t])
+            tmean[t] = np.nanmean(self.actual_data[:,:, t])
         self.totmean_line.set_xdata(range(*self._timeRange ))
         self.totmean_line.set_ydata(tmean)
     def _updateTimeVerLine(self, tnew):
@@ -406,13 +409,13 @@ class interface(object):
             bmean = np.zeros(self._timeRange[1] - self._timeRange[0])
             
             for t in range(self._timeRange[0], self._timeRange[1]):
-                bmean[t-self._timeRange[0]] = np.mean(self.actual_data[self._xRange[0]:self._xRange[1],
+                bmean[t-self._timeRange[0]] = np.nanmean(self.actual_data[self._xRange[0]:self._xRange[1],
                                                                 self._yRange[0]:self._yRange[1],
                                                                 t])
             
             tmean = np.zeros(self.actual_data.shape[2])
             for t in range(0, self.actual_data.shape[2]):
-                bmean[t] = np.mean(self.actual_data[:,:,t])
+                bmean[t] = np.nanmean(self.actual_data[:,:,t])
             
             #ax.plot(trange, tmean, color='b', linewidth=1, label="Image mean")
     
@@ -453,8 +456,8 @@ class lastFrameInterface(object):
         
         self.current_index = 0
         self.datalist = measurementlist
-
-        self.actual_data = self.datalist[self.current_index].data
+        m = self.datalist[self.current_index]
+        self.actual_data = m.data
         
         
         self.display = figure
@@ -473,19 +476,23 @@ class lastFrameInterface(object):
         self.axTime = self.display.add_subplot(self.gs[3, :-1])
         #self.gs.tight_layout(self.display)
         self.img = self.axes.imshow(self.actual_data[:,:], interpolation='none', 
-                                    extent=(0,self.actual_data.shape[1],
-                                            self.actual_data.shape[0], 0
+                                    extent=(self.actual_data.shape[1]/m.scale,0,
+                                            self.actual_data.shape[0]/m.scale, 0
                                             ), aspect="auto")
         m = self.datalist[self.current_index]
-        self.point, = self.axes.plot(m.point[0]-m.offsets[0], m.point[1]-m.offsets[1], 'x', color = "white")
-        self.axes.set_xlim([0,self.actual_data.shape[1]])
-        self.axes.set_ylim([0, self.actual_data.shape[0]])
+        self.point, = self.axes.plot((self.actual_data.shape[1] - (m.point[0]-m.offsets[0]))/m.scale, (m.point[1]-m.offsets[1])/m.scale, 'x', color = "black")
+        print(m.size*5,m.scale)
+        self.circle = plt.Circle(((self.actual_data.shape[1] - (m.point[0]-m.offsets[0]))/m.scale, (m.point[1]-m.offsets[1])/m.scale),m.size,color="black",fill=False)
+        self.axes.add_artist(self.circle)
+        
+        self.axes.set_xlim([0,self.actual_data.shape[1]/m.scale])
+        self.axes.set_ylim([0, self.actual_data.shape[0]/m.scale])
         self.axes.set_autoscalex_on(False)
         self.axes.set_autoscaley_on(False)
+
         
-        
-        min_temp = min(np.amin(m.data) for m in self.datalist)
-        max_temp = max(np.amax(m.data) for m in self.datalist)
+        min_temp = min(np.nanmin(m.data) for m in self.datalist)
+        max_temp = max(np.nanmax(m.data) for m in self.datalist)
         self.img.set_clim(min_temp, max_temp)
         #self.maxtime = len(self.actual_data[0,0,:])-1
         
@@ -515,7 +522,7 @@ class lastFrameInterface(object):
         self.column_ver_line = None
         #self.
         
-        self.mean = np.mean(self.actual_data[:,:])
+        self.mean = np.nanmean(self.actual_data[:,:])
         self.rowmean = 0
         self.val = 0
         self.axText.set_autoscalex_on(False)
@@ -537,9 +544,9 @@ class lastFrameInterface(object):
         
 
     def _updateLabels(self):
-        self.mean = np.mean(self.actual_data[:,:])
+        self.mean = np.nanmean(self.actual_data[:,:])
         if self.detail_line is not None:
-            self.rowmean = np.mean(self.actual_data[self.detail_pos[1], :])
+            self.rowmean = np.nanmean(self.actual_data[self.detail_pos[1], :])
             self.val = self.actual_data[self.detail_pos[1], self.detail_pos[0]]
         else:
             self.rowmean = 0
@@ -553,23 +560,34 @@ class lastFrameInterface(object):
         self.Txt.set_text(txt);
             
     def update(self, newindex):
+        #self.axes.cla()
         self.current_index = min(len(self.datalist)-1, max(0, newindex))
         m = self.datalist[self.current_index]
         self.actual_data = m.data
         self._updateLabels()
-        self.img = self.axes.imshow(self.actual_data, interpolation='none', 
-                                    extent=(0,self.actual_data.shape[1],
-                                            self.actual_data.shape[0], 0
-                                            ), aspect="auto")
+        
+        #self.img = self.axes.imshow(self.actual_data, interpolation='none', 
+        #                            extent=(self.actual_data.shape[1]/m.scale,0,
+        #                                    self.actual_data.shape[0]/m.scale, 0
+        #                                    ), aspect="auto")
+        self.img.set_data(self.actual_data)
+        self.img.set_extent((self.actual_data.shape[1]/m.scale,0,
+                                            self.actual_data.shape[0]/m.scale, 0
+                                            ))
+    
         self._xRange = (0, 0+self.actual_data.shape[0])
         self._yRange = (0, 0+self.actual_data.shape[1])
-        self.point.set_data(m.point[0]-m.offsets[0], m.point[1]-m.offsets[1])
-        self.axes.set_xlim([0,self.actual_data.shape[1]])
-        self.axes.set_ylim([0, self.actual_data.shape[0]])
+        self.point.set_data((self.actual_data.shape[1] - (m.point[0]-m.offsets[0]))/m.scale, (m.point[1]-m.offsets[1])/m.scale)
+        self.circle.set_radius(m.size)
+        self.circle.center = ((self.actual_data.shape[1] - (m.point[0]-m.offsets[0]))/m.scale, (m.point[1]-m.offsets[1])/m.scale)
+        self.axes.set_xlim([0,self.actual_data.shape[1]/m.scale])
+        self.axes.set_ylim([0, self.actual_data.shape[0]/m.scale])
         if self.detail_line is not None:
             self._updateDetailLine(self.detail_pos[1])
+            self._updateHorLine(self.detail_pos[1])
         if self.column_line is not None:
             self._updateColumnLine(self.detail_pos[0])
+            self._updateHorLine(self.detail_pos[0])
         
         self.display.canvas.draw()
        
@@ -629,12 +647,16 @@ class lastFrameInterface(object):
             xrange = self.actual_data[:, xnew ]
             self.column_line, = self.axColumn.plot(yrange, xrange)
     def _updateVerLine(self, xnew):
+        m = self.datalist[self.current_index]
+        xnew = (self.actual_data.shape[1] - xnew)/m.scale
         if self.ver_line is not None:
             self.ver_line.set_xdata([xnew, xnew])
         else:
             ymin, ymax = self.axes.get_ylim()
             self.ver_line, = self.axes.plot([xnew, xnew], [ymin, ymax], '-', color='black',linewidth=1)
     def _updateHorLine(self, ynew):
+        m = self.datalist[self.current_index]
+        ynew /= m.scale
         if self.hor_line is not None:
             self.hor_line.set_ydata([ynew, ynew])
         else:
@@ -668,7 +690,8 @@ class lastFrameInterface(object):
             self.update(t)
     
     def on_mouse_press_main(self, event):
-        self._updatePos(round(event.xdata), round(event.ydata))
+        m = self.datalist[self.current_index]
+        self._updatePos(self.actual_data.shape[1] - (event.xdata)*m.scale, event.ydata*m.scale)
     
     def on_mouse_press_detail(self, event):
         self._updatePos(round(event.xdata), self.detail_pos[1])
@@ -784,7 +807,7 @@ def loadAllMeasurementsGoogleDocs(allmeasurements, login, sheetkey, Verbose = Fa
                                 
                         if Verbose:
                             print("Loading measurement", m)
-def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 600, pre = 60, undisturbed = (30,50)):
+def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetkey, Verbose = False, vertical = 20, trailing = 125, pre = 25, undisturbed = (30,50)):
     print(" --- Loading measurement from google docs --- ")
     sh = login.open_by_key(sheetkey)
     worksheets = sh.worksheets()
@@ -821,15 +844,19 @@ def loadAllMeasurementsGoogleDocsAdaptiveSlicing(allmeasurements, login, sheetke
                                 m.scale = s
                             except ValueError as E:
                                 pass
+                        #m.point = (320-m.scale*LE, m.point[1])
+                        #print ((320-m.point[0])/LE)
+                        m.scale = 1.75
                         minxval = max(int(m.point[0] - trailing * m.scale), 0)
-                        maxxval = min(int(m.point[0] + pre * m.scale), 320)       
+                        maxxval = min(int(m.point[0] + pre* m.scale), 320)
+                        
                         minyval = max(int(m.point[1] - vertical*m.scale), 0)
                         maxyval = min(int(m.point[1] + vertical*m.scale), 280)       
                         slice = ([minyval , maxyval], 
                                  [minxval, maxxval], 
                                  [int(v) for v in row[5:7]])
-                        _undisturbed = ([int(m.point[1] + undisturbed[0]*m.scale), int(m.point[1] + undisturbed[1]*m.scale)], 
-                                       [int(m.point[1] - undisturbed[1]*m.scale), int(m.point[1] - undisturbed[0]*m.scale)])
+                        _undisturbed = ([int(m.point[1] + undisturbed[0]*m.scale*10), int(m.point[1] + undisturbed[1]*m.scale*10)], 
+                                       [int(m.point[1] - undisturbed[1]*m.scale*10), int(m.point[1] - undisturbed[0]*m.scale*10)])
                         m.slice = slice
                         m.undisturbed = _undisturbed
                         if Verbose:
@@ -900,14 +927,22 @@ def findMeasurementDataFromFilename(all_measurements, fname, leading_edge = slic
 def main_loadgoogle(allMeasurements):
     
         
-    
-    gc = gspread.login("D07TAS", "hypersonicroughness")
-        
+    json_key = json.load(open('D7TAS.json'))
+    #scope = ["https://www.googleapis.com/auth/drive"]
+    scope = "https://spreadsheets.google.com/feeds"
+    credentials = SignedJwtAssertionCredentials(json_key['client_email'],str.encode( json_key['private_key']),scope)
+    #gc = gspread.login("D07TAS", "hypersonicroughness")
+    gc = gspread.authorize(credentials)
+    print("login success")
+    sheetkey = "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM"
+    sh = gc.open_by_key(sheetkey)
     
     
 
-    loadAllMeasurementsGoogleDocsAdaptiveSlicing(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM", vertical = 40)
+    loadAllMeasurementsGoogleDocsAdaptiveSlicing(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM")
+    
     #loadAllMeasurementsGoogleDocsNoSlicing(allMeasurements, gc, "1Xw_EXTmFHbKhSj4OGKRff0ClR-_QSO_V_YLUTaOD_GM")
+    print("--- Loaded google docs ---")
     print("---------------------")
 
 def main_load_data(test_measurements):
@@ -949,28 +984,34 @@ def main_calculate_and_save_q_all_memory_efficient(test_measurements):
         
 
 def maxAverage(data):
-    t = np.mean(data, 0)
-    t = np.mean(t,0)
+    t = np.nanmean(data, 0)
+    t = np.nanmean(t,0)
     print(t.shape)
     print(t, np.argmax(t))
     return np.argmax(t)
 
-def main_keep_only_last(test_measurements):
-    simple_measurements = []
 
-    t = []
+def get_same_last_time(test_measurements):
+    t = sys.maxsize
     for m in test_measurements:
         l = False
         if not m.isLoaded():
             l = True
             m.load()
             m.readSlice()
-        t.append(m.slice[2][1] - m.data.time_start)
-        
+        if m.isLoaded():
+            _t = m.slice[2][1] - m.data.time_start
+            if _t < t:
+                t = _t
+
         if l:
             m.unload()
-    t = min(t)
-    
+    return t
+
+def main_keep_only_last(test_measurements, key="ml_K"):
+    simple_measurements = []
+
+
     for m in test_measurements:
         print("-----",m,"-----")
         l = False
@@ -978,53 +1019,33 @@ def main_keep_only_last(test_measurements):
             l = True
             m.load()
             m.readSlice()
-        ind = m.data.time_start - m.offsets[2] + t - 1
-        m.data.ml_q[:,:,ind] = analyses.addGaussianBlurAdv(m.data.ml_q[:,:,ind], m.scale*0.3,2)   
-                   
-        tdat = m.data.ml_K
-        sm = Measurements.simple_measurement(m, tdat, lambda _:ind)
-        simple_measurements.append(sm)
+        if m.isLoaded():
+            tdat = getattr(m.data, key)
+            sm = Measurements.simple_measurement(m, tdat, lambda v:np.nanmean(v[:,:,(v.shape[2]-5):v.shape[2]], axis=2))
+            simple_measurements.append(sm)
         
         if l:
             m.unload()
     return simple_measurements
-    
-        
-def groupMeasurementData(m_data_list):
-    d = {}
-    for m_data in m_data_list:
-        m = m_data[0]
-        name = m.filepath[:-9]
-        data = m_data[1]
-        if name in d:
-            d[name].append((data, m))
-        else:
-            d[name] = [(data, m)]
-    return d
-def combineMeasurementData(m_data_list):
-    d = groupMeasurementData(m_data_list)
-    for i in d:
-        v = d[i]
-        d[i] = (np.mean(v, 1), v[1])
-    
-    return [d.items()]
-    
+
 
         
 def main():
-
+    #pip install PyOpenSSL
+    #pip install oauth2client
     
     filename = "half_sphere_r_2_100bar_run2.ptw"
     filename2 = "cylinder_r_2_h_2_100bar_run1.ptw"
     allMeasurements = Measurements.all_measurements(("H:/AE2223-II/3cm_LE/","H:/AE2223-II/6cm_LE/"))
     main_loadgoogle(allMeasurements)
     
-    print(len(allMeasurements))
-    print("loaded google docs")
+    print("Number of measurements loaded:", len(allMeasurements))
+    
     #test_measurements = allMeasurements.get_measurements(LE=60)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=30)
     #test_measurements = allMeasurements.get_measurements(fname = filename,LE=60)
-    test_measurements = allMeasurements.get_measurements(LE=30, fname = filename2)
+    test_measurements = allMeasurements.get_measurements(shape="cylinder", size=2, height=2, pressure=60, LE=30)
+    #test_measurements.extend(allMeasurements.get_measurements(LE=60, shape="cylinder",size=2,height=2,pressure=60))
     #test_measurements.extend(allMeasurements.get_measurements("cylinder", size=4, pressure=100, LE=30))
     #test_measurements.extend(allMeasurements.get_measurements(size=5.6, height=2, pressure=100, LE=30))
     #test_measurements.extend(allMeasurements.get_measurements(shape = "cylinder", size=4, pressure=100, LE=30))
@@ -1044,37 +1065,51 @@ def main():
     print(len(test_measurements))
    
     main_load_data(test_measurements)
-    m = test_measurements[0]
-    for i in range(m.data.ml_q.shape[2]):
-        m.data.ml_q[:,:,i] = analyses.addGaussianBlurAdv(m.data.ml_q[:,:,i], m.scale*0.3,2) 
-    #main_show_measurements(test_measurements)
     
     
-    v = m.data.ml_st
-    m = test_measurements[0]
-    exp_st1 = v[m.data.ml_temp.shape[0]/2+10,:,-1]
-    exp_st2 = v[m.data.ml_temp.shape[0]/2+60,:,-1]
+    simple_measurements = main_keep_only_last(test_measurements, "ml_K")
+    """
+        second argument is any of:
+        ml_temp
+        ml_delta_temp
+        ml_q
+        ml_st
+        ml_K
+    """
     
-
     
     
-    exp_st3 = v[m.data.ml_temp.shape[0]/2+10,:,m.data.ml_st.shape[2]/2]
-    exp_st4 = v[m.data.ml_temp.shape[0]/2+60,:,m.data.ml_st.shape[2]/2]
-    
-    
+    #v = m.data.ml_st
     f1 = plt.figure()
     ax1 = f1.add_subplot("111")
-    ax1.plot(test_measurements[0].st_lam)
-    ax1.plot(test_measurements[0].st_turb)
-    ax1.plot(exp_st1[::-1])
-    ax1.plot(exp_st2[::-1])
-    ax1.plot(exp_st3[::-1])
-    ax1.plot(exp_st4[::-1])
+    
+    for m in test_measurements:
+        v = getattr(m.data, "ml_st")
+        x1 = m.to_relative_pos(m.point)[1]+ m.size*m.scale+3
+        x2 = 0
+        
+        xval = (np.array(range(m.data.shape[1]))+320-m.data.shape[1]-m.offsets[0]) / m.scale
+        
+        end = np.nanmean(v[:,:,(v.shape[2]-5):v.shape[2]], axis=2)
+        exp_st3 = end[x1,:]
+        exp_st4 = end[x2,:]
+        
+        
+
+        ax1.plot(xval, m.st_lam)
+        ax1.plot(xval, m.st_turb)
+        ax1.plot(xval, exp_st3[::-1])
+        ax1.plot(xval, exp_st4[::-1])
+    
+    
+
+    analyses.plotData(simple_measurements)
+    
     
     #print(c)
 
     
-    
+    main_show_reduced_measurements(simple_measurements)
 
             
     

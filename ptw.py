@@ -192,7 +192,6 @@ class ptw_file(object):
 		return self._data
 	@staticmethod
 	def matlab_convert(Im, tint, Tcam, eps):
-		print(tint, Tcam, eps)
 		if(np.round(tint*1.e6) == 400):
 		    print("--- Converting (Matlab 400 microsec) ---")
 		    elambda=np.array([2498026.51787585,1784.71556672801,6.67171636375203e-12,3215.59874368947,493144.349437419])
@@ -209,7 +208,7 @@ class ptw_file(object):
 		return Tm
 	
 	def matlab_convert_helper(self):
-		return ptw_file.matlab_convert(self.dataRaw(),self.integration, 28+273.15, 0.86)
+		return ptw_file.matlab_convert(self.dataRaw(),self.integration, 25+273.15, 0.86)
 		#return self.python_convert()
 	def calcTempML_U(self):
 		return ptw_file.matlab_convert(self._undisturbedData,self.integration, 22.4+273.15, 0.86)
@@ -337,7 +336,6 @@ class ptw_file(object):
 		rho_static = 1190
 		c = 1200
 		k = 0.02
-		print(rho_static, c, k)
 		for x in range(v.shape[0]):
 			print ("calculating column: ", x)
 			for y in range((self.ml_delta_temp.shape[1])):

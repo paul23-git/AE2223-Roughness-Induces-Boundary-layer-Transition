@@ -75,10 +75,9 @@ class measurement(object):
         Rex = m.V*m.chord/v
         x0 = self.data.cols - self.slice[1][0]
         x1 = self.data.cols - self.slice[1][1] 
-        xarr = np.array(range(x1, x0) ) + 1/(2*self.scale)
-        print("-----------", self.scale, self.slice, self.data.cols, x0, x1)
-        print(xarr)
-        return Rex*self.scale/1000* xarr
+        print("=====", self.data.cols, x1, x0, self.point[0], self.leading_edge_distance -(self.data.cols - x1 - self.point[0])/m.scale)
+        xarr = np.array(range(x1, x0) ) + 0.5
+        return Rex*((xarr)/(m.scale*1000)  )
         # calculate and insert other flow & measurement parameters here!
     @property
     def cp(self):
@@ -177,7 +176,17 @@ class measurement(object):
             self.data.saveQ()
     def isLoaded(self):
         return self.data is not None
+
+    def to_absolute_pos(self, relative_pos):
+        return tuple(map(operator.add,relative_pos, self.offsets))
     
+    def to_relative_pos(self, absolute_pos):
+        return tuple(map(operator.sub,absolute_pos, self.offsets))
+    
+    def to_point_pos(self, absolute_pos):
+        return tuple(map(operator.sub,absolute_pos, self.point))
+        
+
     def __repr__(self):
         return "measure" + str((self.filepath, str(self.leading_edge_distance)))
     
@@ -192,7 +201,7 @@ class simple_measurement(object):
     Measurement object contains all data relevant to a measurement
     """ 
     
-    def __init__(self, measurement, data = None, index_lambda = None):
+    def __init__(self, measurement, data = None, get_lambda = None):
         """
         Initializes a measurement object, keeps track of all measurements and other data
         @param filepath: filepath
@@ -223,13 +232,15 @@ class simple_measurement(object):
         self.offsets = measurement.offsets[:-1]
         self.ind = -1
         self.Ktresh_hold = measurement.Ktresh_hold
-        if index_lambda is not None:
-            ind = index_lambda(data)
         
         if data is None:
-            self._data = measurement.data.data[:,:,self.ind]
+            data = measurement.data
+        
+        if get_lambda is not None:
+            self._data = get_lambda(data)
         else:
-            self._data = data[:,:,self.ind]
+            self._data = data[:,:,-1]
+
         self.reynolds = measurement.reynolds
         self.st_lam = measurement.st_lam
         self.st_turn = measurement.st_turb

@@ -2,6 +2,7 @@ from collections import namedtuple
 import os.path
 import numpy as np
 from scipy import ndimage
+import matplotlib.pyplot as plt
 
 import Measurements
 def gaussian2d(rsquared, sigma):
@@ -30,23 +31,56 @@ def addBoxBlur(data):
 def getColumnLine(data2d):
     ret = np.empty(data2d.shape[1])
     for i, column in enumerate(data2d.T):
-        ret[i] = np.mean(column)
+        ret[i] = np.nanmean(column)
     return ret
 def getRowLine(data2d):
     ret = np.empty(data2d.shape[0])
     for i, column in enumerate(data2d):
-        ret[i] = np.mean(column)
+        ret[i] = np.nanmean(column)
     return ret
 
 def averageTotal(data2d):
-    return np.mean(data2d)
+    return np.nanmean(data2d)
 
-def plotData(reduced_measurements):
+def MakeRoughnessNan(data2d, point_px, radius_px):
+    rsq = radius_px**2
+    for index, x in np.ndenumerate(data2d):
+        i = (index[1] - point_px[0], index[0] - point_px[1])
+        if i[0]**2 + i[1]**2 <= rsq:
+            data2d[index[0], index[1]] = float('nan')
+    return data2d
+    
+    
+        
+def groupMeasurementData(m_data_list):
+    d = {}
+    for m_data in m_data_list:
+        m = m_data[0]
+        name = m.filepath[:-9]
+        data = m_data[1]
+        if name in d:
+            d[name].append((data, m))
+        else:
+            d[name] = [(data, m)]
+    return d
+def combineMeasurementData(m_data_list):
+    d = groupMeasurementData(m_data_list)
+    for i in d:
+        v = d[i]
+        d[i] = (np.mean(v, 1), v[1])
+    
+    return [d.items()]
+    
+
+
+
+def plotData(reduced_measurements, simple_display = True):
     colors = ["b", "g", "r", "c", "m", "y"]
     f1 = plt.figure()
     ax1 = f1.add_subplot("111")
-    
-    d = [(m, analyses.getColumnLine(m.data)) for m in reduced_measurements]
+    for m in reduced_measurements:
+        MakeRoughnessNan(m.data, m.to_relative_pos(m.point), m.size*m.scale+1)
+    d = [(m, getColumnLine(m.data)) for m in reduced_measurements]
     g = groupMeasurementData(d)
     #d = [(m, analyses.averageTotal(m.data)) for m in reduced_measurements]
 
@@ -58,7 +92,13 @@ def plotData(reduced_measurements):
         for j in i:
             d = j[0]
             m = j[1]
-            xval = np.array(range(len(d),0,-1)) / m.scale
+            o = 0;
+            if not simple_display:
+                o = 320-m.data.shape[1]-m.offsets[0]
+            else:
+                print("-=-==-", (m.data.shape[1]+m.offsets[0]-m.point[0]))
+                o = -(m.data.shape[1]+m.offsets[0]-m.point[0])
+            xval = (np.array(range(len(d),0,-1))+o) / m.scale
             if added_to_leg:
                 plt.plot(xval, d, color=c)
             else:
@@ -74,7 +114,7 @@ def plotData(reduced_measurements):
     f2 = plt.figure()
     ax2 = f2.add_subplot("111")
     
-    d = [(m, analyses.getRowLine(m.data)) for m in reduced_measurements]
+    d = [(m, getRowLine(m.data)) for m in reduced_measurements]
     g = groupMeasurementData(d)
     #d = [(m, analyses.averageTotal(m.data)) for m in reduced_measurements]
 
@@ -86,7 +126,7 @@ def plotData(reduced_measurements):
         for j in i:
             d = j[0]
             m = j[1]
-            xval = np.array(range(len(d),0,-1)) / m.scale
+            xval = (np.array(range(len(d),0,-1))) / m.scale
             if added_to_leg:
                 plt.plot(xval, d, color=c)
             else:
@@ -97,3 +137,4 @@ def plotData(reduced_measurements):
     ax2.set_ylabel("K $[\cdot]$")
     ax2.set_xlabel("Vertical position $[mm]$")
     ax2.legend()
+    return ax1, ax2
